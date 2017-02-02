@@ -10,7 +10,7 @@ class Config{
 	public static $dbusername = "root";
 	public static $dbpassword = "";
 	public static $dbname = "disconunu";
-
+	public static $mod_rewrite = true;
 
 	static function getSiteURL(){
 

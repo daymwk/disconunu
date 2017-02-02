@@ -30,10 +30,17 @@ foreach ($articles as $article) {
 echo '<ul class="pagination">';
 for ($j = 1 ; $j <= $numberOfPages ; $j++)
 {
-	if($j == $page)
+
+
+		if($j == $page)
    echo '<li class="active"><a href="?page=' . $j . '">' . $j . '</a></li>';
-else
+	else
 	 echo '<li><a href="?page=' . $j . '">' . $j . '</a></li>';
+
+
+
+
+
 }
 echo '</ul>';
 

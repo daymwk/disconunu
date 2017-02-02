@@ -13,7 +13,7 @@ require_once 'view/allArticles.php';
 <?php
 
 
-printAllArticles(3);
+printAllArticles(2);
 
 
 ?>

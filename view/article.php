@@ -1,5 +1,5 @@
 <?php
-//require  dirname(__FILE__) . '/../controller/classes.php';
+//require  dirname(__FILE__) . '/../config.php';
 
 /* 
 Prints an article 
@@ -20,9 +20,12 @@ echo '<h2>' . $article->getTitle() . '</h2>';
 //print content
 $toShow = preg_split('/<cut-article>/', $article->getContent());
 echo $toShow[0];
-
 //print 'read more' button
+if(!Config::$mod_rewrite)
 $address = Config::getSiteURL() . '/controller/get_article.php?idArticle='. $idArticle;
+else
+$address = Config::getSiteURL() . '/article/'. $idArticle;
+
 echo '<a href="'. $address. '"><button type="button" class="btn btn-secondary">Read more</button></a>';
 
 //print article footer

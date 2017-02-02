@@ -23,7 +23,25 @@ echo '<nav class="navbar navbar-default">
 //creating menu links
 foreach($main->getItems() as $menuItem){
 
-	echo '<li><a href="' . Config::getSiteURL() . '/controller/get_article.php?idArticle=' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
+
+if (Config::$mod_rewrite){
+
+  if(isset($_GET['idArticle']) &&  $_GET['idArticle'] == $menuItem->getArticleID())
+  echo '<li class="active"><a href="' . Config::getSiteURL() . '/article/' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
+  else
+  echo '<li><a href="' . Config::getSiteURL() . '/article/' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
+
+}  
+else{
+
+
+  if(isset($_GET['idArticle']) &&  $_GET['idArticle'] == $menuItem->getArticleID())
+  echo '<li class="active"><a href="' . Config::getSiteURL() . '/controller/get_article.php?idArticle=' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
+  else
+  echo '<li><a href="' . Config::getSiteURL() . '/controller/get_article.php?idArticle=' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
+
+
+}
 
 
 }
