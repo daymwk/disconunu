@@ -12,11 +12,15 @@ require_once dirname(__FILE__) . '/../config.php';
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
 </head>
-<div class="container-fluid">
-     <div class="titles">
-          <h1><?php echo Config::$sitename; ?></h1>
-     <h3>Le blog qui n'est pas de la tarte</h3>
+<div class="custom-container">
+<div id="header">
+<div style="float:left;">
+	<a href="<?php echo Config::getSiteURL();?>"><img src="<?php echo Config::getSiteURL();?>/images/logo.jpg" id="logo" alt="logo"/></a>
 </div>
 
-
+     <div class="titles">
+          <h1><?php echo Config::$sitename; ?></h1>
+     <h3><?php echo Config::$subTitle;?></h3>
+</div>
+</div>
 

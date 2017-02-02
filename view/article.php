@@ -22,7 +22,7 @@ $toShow = preg_split('/<cut-article>/', $article->getContent());
 echo $toShow[0];
 
 //print 'read more' button
-$address = "http://".$_SERVER['SERVER_NAME'].$_SERVER["REQUEST_URI"]. 'controller/get_article.php?idArticle='. $idArticle;
+$address = Config::getSiteURL() . '/controller/get_article.php?idArticle='. $idArticle;
 echo '<a href="'. $address. '"><button type="button" class="btn btn-secondary">Read more</button></a>';
 
 //print article footer

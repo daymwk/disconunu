@@ -2,8 +2,9 @@
 
 class Config{
 
-	public static $sitename = 'Pasta blog';
-	public static $hash = ''; 
+	public static $sitename = 'Disco nunu';
+	public static $subTitle = 'Simple CMS for blogs';
+	public static $salt = '$KMGg4QdfF'; 
 	public static $folder = 'disconunu';
 	public static $servername = "localhost";
 	public static $dbusername = "root";
@@ -19,6 +20,5 @@ class Config{
 }
 
 
-$config = new Config();
 
 ?>

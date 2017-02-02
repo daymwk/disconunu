@@ -2,7 +2,8 @@
 <?php
 
 function salt() {
-	return '$KMGg4QdfF';
+	require_once dirname(__FILE__) . '/../config.php';
+	return Config::$salt;
 }
 
 

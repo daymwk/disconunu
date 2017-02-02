@@ -20,7 +20,7 @@ echo '<html>
 
 <div class="col-md-12">
                      
-                    <div class="col-md-8">
+                    <div class="col-md-9">
 <div class="row">
 <div class="haut-article">
 </div>';
@@ -45,7 +45,7 @@ width: 100%;
 
 //closing tags
 echo '</div></div></div>
-<div class="col-md-4">
+<div class="col-md-3">
 <div class="row">
 
 </div>
