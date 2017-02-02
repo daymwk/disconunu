@@ -20,11 +20,6 @@ function selectArticle($idArticle){
 
 function selectArticleRange($limit1,$limit2){
 	require 'dbConnect.php';
-	/*
-	$stmt = $dbh->prepare("SELECT * FROM ARTICLE ORDER BY id DESC LIMIT :limit1 , :limit2");
-	$stmt->bindParam(':limit1', $limit1);
-	$stmt->bindParam(':limit2', $limit2);
-	*/
 	$stmt = $dbh->prepare("SELECT * FROM ARTICLE ORDER BY id DESC LIMIT " . $limit1 . " , " . $limit2);
 	if($stmt->execute()){
 		return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -66,6 +61,34 @@ function selectUser($idUser){
 
 }
 
+function selectMenu($menuName){
+	require 'dbConnect.php';
+	$stmt = $dbh->prepare("SELECT * FROM MENU WHERE title = :menuName");
+	$stmt->bindParam(':menuName', $menuName);
+
+	if($stmt->execute()){
+		return $stmt->fetch(PDO::FETCH_ASSOC);
+	}
+	else{
+		return false;
+	}
+
+}
+
+
+function selectMenuItems($idMenu){
+	require 'dbConnect.php';
+	$stmt = $dbh->prepare("SELECT * FROM MENUITEM WHERE idMenu = :idMenu");
+	$stmt->bindParam(':idMenu', $idMenu);
+
+	if($stmt->execute()){
+		return $stmt->fetchAll(PDO::FETCH_ASSOC);
+	}
+	else{
+		return false;
+	}
+
+}
 
 
 ?>

@@ -23,4 +23,5 @@ require_once dirname(__FILE__) . '/../config.php';
      <h3><?php echo Config::$subTitle;?></h3>
 </div>
 </div>
-
+<body>
+<?php include('menu.php') ?>

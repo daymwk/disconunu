@@ -1,5 +1,5 @@
 <?php
-require  dirname(__FILE__) . '/../controller/classes.php';
+//require  dirname(__FILE__) . '/../controller/classes.php';
 
 /* 
 Prints an article 
