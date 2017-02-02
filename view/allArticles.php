@@ -19,8 +19,6 @@ $articles = getArticlePage($limit1,$articlePerPage);
 
 
 
-
-
 foreach ($articles as $article) {
 
   		printArticle($article->getIdArticle());

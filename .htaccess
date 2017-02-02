@@ -2,7 +2,4 @@
 RewriteEngine On
 
 # Rewrite article links
-RewriteRule ^article/([0-9]) controller/get_article.php?idArticle=$1 [NC,L]
-
-# Rewrite page links
-RewriteRule ^page/([0-9]) ?page=$1 [NC,L]
+RewriteRule ^article/([0-9]+) controller/get_article.php?idArticle=$1 [NC,L]
