@@ -3,7 +3,7 @@
 
 function salt() {
 	require_once dirname(__FILE__) . '/../config.php';
-	return Config::$salt;
+	return $config->salt;
 }
 
 

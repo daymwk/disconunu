@@ -15,7 +15,7 @@ echo '<nav class="navbar navbar-default">
         <span class="icon-bar"></span>
         <span class="icon-bar"></span>
       </button>
-      <a class="navbar-brand" href="' . Config::getSiteURL() . '"><i class="fa fa-home fa-5" aria-hidden="true"></i></a>
+      <a class="navbar-brand" href="' . $config->getSiteURL() . '"><i class="fa fa-home fa-5" aria-hidden="true"></i></a>
     </div><!-- Collect the nav links, forms, and other content for toggling -->
     <div class="collapse navbar-collapse">
       <ul class="nav navbar-nav">';
@@ -24,21 +24,21 @@ echo '<nav class="navbar navbar-default">
 foreach($main->getItems() as $menuItem){
 
 
-if (Config::$mod_rewrite){
+if ($config->mod_rewrite){
 
   if(isset($_GET['idArticle']) &&  $_GET['idArticle'] == $menuItem->getArticleID())
-  echo '<li class="active"><a href="' . Config::getSiteURL() . '/article/' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
+  echo '<li class="active"><a href="' .$config->getSiteURL() . '/article/' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
   else
-  echo '<li><a href="' . Config::getSiteURL() . '/article/' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
+  echo '<li><a href="' . $config->getSiteURL() . '/article/' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
 
 }  
 else{
 
 
   if(isset($_GET['idArticle']) &&  $_GET['idArticle'] == $menuItem->getArticleID())
-  echo '<li class="active"><a href="' . Config::getSiteURL() . '/controller/get_article.php?idArticle=' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
+  echo '<li class="active"><a href="' . $config->getSiteURL() . '/controller/get_article.php?idArticle=' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
   else
-  echo '<li><a href="' . Config::getSiteURL() . '/controller/get_article.php?idArticle=' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
+  echo '<li><a href="' . $config->getSiteURL() . '/controller/get_article.php?idArticle=' . $menuItem->getArticleID() . '">' . $menuItem->getTitle() . '</a></li>';
 
 
 }
