@@ -14,7 +14,7 @@ class Config{
 	public $mod_rewrite = true;
 
 
-	private function __contrust(){
+	private function __construct(){
 		
 	}
 
