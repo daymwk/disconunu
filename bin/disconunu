@@ -1,0 +1,86 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/**
+ * CLI d'installation et de maintenance :
+ *   bin/disconunu migrate            — applique les migrations
+ *   bin/disconunu user <login> <email> [--admin] — crée un utilisateur (prompt mdp)
+ *   bin/disconunu password <login>   — change un mot de passe
+ */
+
+require __DIR__ . '/../autoload.php';
+
+use DN\App;
+use DN\Database;
+use DN\Migrator;
+use DN\Model\User;
+
+App::boot();
+
+$argv0 = $argv[1] ?? 'help';
+
+switch ($argv0) {
+    case 'migrate':
+        $applied = Migrator::run();
+        echo $applied ? "Migrations appliquées : " . implode(', ', $applied) . "\n" : "Schéma à jour.\n";
+        echo "Base : " . Database::get()->driver() . ' — ' . Database::get()->pdo()->query('SELECT COUNT(*) FROM dn_post')->fetchColumn() . " article(s)\n";
+        break;
+
+    case 'user':
+        $login = $argv[2] ?? null;
+        $email = $argv[3] ?? null;
+        $role  = in_array('--admin', $argv, true) ? 'admin' : 'author';
+        if (!$login || !$email) {
+            fwrite(STDERR, "Usage: bin/disconunu user <login> <email> [--admin]\n");
+            exit(1);
+        }
+        if (User::findByUsername($login) !== null || User::emailExists($email)) {
+            fwrite(STDERR, "Login ou email déjà pris.\n");
+            exit(1);
+        }
+        // Mot de passe : stdin interactif, ou DN_USER_PASSWORD pour le scripting/tests.
+        $pw = getenv('DN_USER_PASSWORD');
+        if (!is_string($pw) || $pw === '') {
+            echo "Mot de passe (masqué) : ";
+            system('stty -echo 2>/dev/null');
+            $pw = rtrim((string)fgets(STDIN), "\n");
+            system('stty echo 2>/dev/null');
+            echo "\n";
+        }
+        if (strlen($pw) < 10) {
+            fwrite(STDERR, "Mot de passe trop court (min 10).\n");
+            exit(1);
+        }
+        User::create($login, $email, $pw, $role);
+        echo "Utilisateur créé : {$login} ({$role})\n";
+        break;
+
+    case 'password':
+        $login = $argv[2] ?? null;
+        if (!$login) {
+            fwrite(STDERR, "Usage: bin/disconunu password <login>\n");
+            exit(1);
+        }
+        $u = User::findByUsername($login);
+        if ($u === null) {
+            fwrite(STDERR, "Utilisateur inconnu.\n");
+            exit(1);
+        }
+        echo "Nouveau mot de passe (masqué) : ";
+        system('stty -echo');
+        $pw = rtrim((string)fgets(STDIN), "\n");
+        system('stty echo');
+        echo "\n";
+        if (strlen($pw) < 10) {
+            fwrite(STDERR, "Mot de passe trop court (min 10).\n");
+            exit(1);
+        }
+        $st = Database::get()->pdo()->prepare('UPDATE dn_user SET password_hash = ? WHERE id = ?');
+        $st->execute([User::hashPassword($pw), $u->id]);
+        echo "Mot de passe mis à jour.\n";
+        break;
+
+    default:
+        echo "disconunu — commandes : migrate | user <login> <email> [--admin] | password <login>\n";
+}

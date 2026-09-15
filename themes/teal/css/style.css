@@ -1,0 +1,290 @@
+/* ============================================================
+   Disco nunu — thème "teal"
+   Héritier de la DA 2017 : le vert-bleu #29d9c2 / #00a2a5 est resté,
+   tout le reste est reconstruit en CSS moderne (variables, dark mode,
+   fluide, zéro framework).
+   ============================================================ */
+
+:root {
+  --teal:        #29d9c2;
+  --teal-deep:   #00a2a5;
+  --teal-ink:    #06373a;
+  --ink:         #16211f;
+  --ink-soft:    #5b6b68;
+  --paper:       #fafcfb;
+  --card:        #ffffff;
+  --line:        #dbe7e4;
+  --accent-bg:   color-mix(in srgb, var(--teal) 12%, white);
+  --danger:      #c0392b;
+  --ok:          #1c8a6d;
+  --radius:      10px;
+  --shadow:      0 1px 2px rgba(6,55,58,.06), 0 8px 24px rgba(6,55,58,.06);
+  --font-body:   Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  --font-ui:     system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --measure:     68ch;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink:       #e6f2ef;
+    --ink-soft:  #9db5b0;
+    --paper:     #0e1615;
+    --card:      #14201e;
+    --line:      #243532;
+    --accent-bg: color-mix(in srgb, var(--teal) 14%, #0e1615);
+    --shadow:    0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font: 400 1.0625rem/1.65 var(--font-body);
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1040px;
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 2.5rem);
+}
+
+/* ---------- header : le bandeau teal de 2017, épuré ---------- */
+.site-header {
+  background: linear-gradient(120deg, var(--teal) 0%, var(--teal-deep) 100%);
+  color: #fff;
+  border-bottom: 3px solid var(--teal-ink);
+}
+.header-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-block: .9rem;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  color: #fff;
+  text-decoration: none;
+}
+.brand-mark {
+  font-size: 1.6rem;
+  line-height: 1;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.15));
+}
+.brand-text { display: grid; line-height: 1.15; }
+.brand-text small { opacity: .85; font-weight: 400; }
+.brand-text strong { font-size: 1.25rem; letter-spacing: .01em; }
+
+.site-nav {
+  display: flex;
+  gap: .25rem;
+  flex-wrap: wrap;
+  font-family: var(--font-ui);
+  font-size: .95rem;
+}
+.site-nav a {
+  color: #fff;
+  text-decoration: none;
+  padding: .45rem .8rem;
+  border-radius: 999px;
+  transition: background .15s ease;
+}
+.site-nav a:hover, .site-nav a:focus-visible { background: rgba(255,255,255,.18); }
+.site-nav .btn-admin {
+  background: rgba(255,255,255,.14);
+  outline: 1px solid rgba(255,255,255,.45);
+}
+
+/* ---------- corps ---------- */
+main.wrap { padding-block: 2.2rem 3rem; min-height: 60vh; }
+
+.post-list { display: grid; gap: 1.6rem; }
+
+.post-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--teal);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.4rem 1.6rem;
+}
+.post-card h2 { margin: 0 0 .35rem; font-size: 1.45rem; line-height: 1.25; }
+.post-card h2 a { color: inherit; text-decoration: none; }
+.post-card h2 a:hover { color: var(--teal-deep); }
+
+.post-meta {
+  font-family: var(--font-ui);
+  font-size: .8rem;
+  color: var(--ink-soft);
+  display: flex;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+.post-meta time { font-variant-numeric: tabular-nums; }
+
+.post-excerpt { margin: .6rem 0 .9rem; }
+
+.more-link {
+  font-family: var(--font-ui);
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--teal-deep);
+  text-decoration: none;
+}
+.more-link:hover { text-decoration: underline; }
+
+.post-full { max-width: var(--measure); }
+.post-full h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); margin: .2rem 0 .4rem; }
+.post-body { font-size: 1.1rem; }
+.post-body img { max-width: 100%; height: auto; border-radius: var(--radius); }
+.post-body pre {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+  overflow-x: auto;
+  font-size: .9em;
+}
+.post-body blockquote {
+  margin: 1.2rem 0;
+  padding: .2rem 1.2rem;
+  border-left: 4px solid var(--teal);
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+/* ---------- pagination ---------- */
+.pagination {
+  display: flex;
+  gap: .4rem;
+  list-style: none;
+  padding: 0;
+  margin: 2rem 0 0;
+  font-family: var(--font-ui);
+}
+.pagination a, .pagination .current {
+  display: inline-block;
+  min-width: 2.2rem;
+  text-align: center;
+  padding: .4rem .5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--card);
+}
+.pagination a:hover { border-color: var(--teal); color: var(--teal-deep); }
+.pagination .current { background: var(--teal); border-color: var(--teal-deep); color: #fff; }
+
+/* ---------- flash ---------- */
+.flash {
+  font-family: var(--font-ui);
+  padding: .7rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.2rem;
+  border: 1px solid;
+}
+.flash-ok    { background: color-mix(in srgb, var(--ok) 12%, var(--card)); border-color: var(--ok); }
+.flash-error { background: color-mix(in srgb, var(--danger) 10%, var(--card)); border-color: var(--danger); }
+.flash-info  { background: var(--accent-bg); border-color: var(--teal-deep); }
+
+/* ---------- formulaires ---------- */
+form.auth-form, form.post-form {
+  max-width: 640px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.6rem;
+  display: grid;
+  gap: 1rem;
+}
+form label {
+  display: grid;
+  gap: .3rem;
+  font-family: var(--font-ui);
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+input[type=text], input[type=password], input[type=email], input[type=search], textarea, select {
+  font: inherit;
+  font-family: var(--font-ui);
+  padding: .55rem .7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+}
+textarea { min-height: 18rem; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: .9rem; }
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid var(--teal);
+  outline-offset: 1px;
+  border-color: var(--teal-deep);
+}
+.btn {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: .95rem;
+  padding: .55rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--teal-deep);
+  background: linear-gradient(120deg, var(--teal), var(--teal-deep));
+  color: #fff;
+  cursor: pointer;
+}
+.btn:hover { filter: brightness(1.06); }
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+  padding: .3rem .8rem;
+  font-size: .85rem;
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--teal-deep);
+}
+
+/* ---------- admin ---------- */
+.admin-table { width: 100%; border-collapse: collapse; font-family: var(--font-ui); font-size: .92rem; }
+.admin-table th, .admin-table td { padding: .6rem .5rem; border-bottom: 1px solid var(--line); text-align: left; }
+.admin-table th { color: var(--ink-soft); font-weight: 600; }
+.badge {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  padding: .15rem .55rem; border-radius: 999px;
+}
+.badge-published { background: var(--accent-bg); color: var(--teal-ink); }
+.badge-draft     { background: #f1f1f1; color: #666; }
+@media (prefers-color-scheme: dark) {
+  .badge-draft { background: #243532; color: #9db5b0; }
+  .badge-published { color: var(--teal); }
+}
+
+.admin-actions { display: flex; gap: .6rem; align-items: center; margin-bottom: 1.2rem; flex-wrap: wrap; }
+
+/* ---------- footer ---------- */
+.site-footer {
+  border-top: 1px solid var(--line);
+  font-family: var(--font-ui);
+  font-size: .85rem;
+  color: var(--ink-soft);
+}
+.site-footer .wrap { display: flex; justify-content: space-between; padding-block: 1.2rem; }
+.site-footer a { color: var(--teal-deep); }
+
+/* ---------- erreurs ---------- */
+.error-page { text-align: center; padding: 4rem 1rem; }
+.error-page .code { font-size: 5rem; font-weight: 700; color: var(--teal); line-height: 1; }
+
+@media (max-width: 640px) {
+  .header-grid { flex-direction: column; align-items: flex-start; }
+}

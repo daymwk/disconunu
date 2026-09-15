@@ -1,0 +1,11 @@
+# Données locales (SQLite, logs) — jamais versionnées
+/var/
+/config/config.local.php
+/config/.env
+
+# Dépendances
+/vendor/
+
+# Fichiers éditeur / OS
+*.swp
+.DS_Store

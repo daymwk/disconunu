@@ -6,12 +6,12 @@ class Config{
 	public $sitename = 'Disco nunu';
 	public $subTitle = 'Simple CMS for blogs';
 	public $salt = '$KMGg4QdfF'; 
-	public $folder = 'disconunu';
+	public $folder = ''; // local dev: servi à la racine via php -S (2026-09-15)
 	public $servername = "localhost";
 	public $dbusername = "root";
 	public $dbpassword = "";
 	public $dbname = "disconunu";
-	public $mod_rewrite = true;
+	public $mod_rewrite = false; // local dev: php -S ne gère pas .htaccess
 
 
 	private function __construct(){
@@ -31,7 +31,8 @@ class Config{
 
 	public function getSiteURL(){
 
-		return "http://".$_SERVER['SERVER_NAME'] . '/' . $this->folder;
+		$port = isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] != 80 ? ':' . $_SERVER['SERVER_PORT'] : '';
+		return "http://" . $_SERVER['SERVER_NAME'] . $port . '/' . $this->folder;
 
 	}
 }

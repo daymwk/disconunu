@@ -34,7 +34,8 @@ function selectArticleRange($limit1,$limit2){
 function selectAllArticles(){
 	require 'dbConnect.php';
 	$stmt = $dbh->prepare("SELECT * FROM ARTICLE");
-	$stmt->bindParam(':idArticle', $idArticle);
+	// bindParam(':idArticle') retiré : copié-collé legacy, aucun placeholder dans cette requête,
+	// le driver sqlite PDO rejette le bind fantôme (mysqlnd l'ignorait)
 
 	if($stmt->execute()){
 		return $stmt->fetchAll(PDO::FETCH_ASSOC);
