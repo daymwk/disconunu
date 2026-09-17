@@ -3,20 +3,19 @@ declare(strict_types=1);
 
 namespace DN;
 
-/**
- * Theme manager: a theme = a folder under themes/ containing layout.php (+ templates + css).
- * Themes can be installed from a .zip upload (superadmin), validated against traversal bombs
- * and layout.php presence before landing in themes/.
- */
+/** PHP themes are trusted executable code, not sandboxed presentation assets. */
 final class ThemeManager
 {
     /** @return list<string> installed theme names (contain layout.php) */
     public static function available(): array
     {
         $root = App::rootDir() . '/themes';
-        $out  = [];
+        $out = [];
         foreach (glob($root . '/*/layout.php') ?: [] as $f) {
-            $out[] = basename(dirname($f));
+            $name = basename(dirname($f));
+            if (preg_match('/^[a-zA-Z0-9_-]+$/D', $name) && !is_link(dirname($f)) && !is_link($f) && is_file($f)) {
+                $out[] = $name;
+            }
         }
         sort($out);
         return $out;
@@ -24,14 +23,22 @@ final class ThemeManager
 
     public static function exists(string $name): bool
     {
-        return in_array($name, self::available(), true);
+        if (!in_array($name, self::available(), true)) return false;
+        try {
+            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(
+                App::rootDir() . '/themes/' . $name, \FilesystemIterator::SKIP_DOTS
+            ));
+            foreach ($files as $file) {
+                if ($file->isLink()) return false;
+                if ($file->isFile() && strtolower($file->getExtension()) === 'php') self::lintPhp($file->getPathname());
+            }
+            return true;
+        } catch (\RuntimeException) {
+            return false;
+        }
     }
 
-    /**
-     * Install a theme from an uploaded zip. Safe against zip-slip (path traversal).
-     * @return string theme name on success
-     * @throws \RuntimeException on invalid archive
-     */
+    /** @throws \RuntimeException on invalid archives; returns the installed name. */
     public static function installFromZip(string $tmpZipPath): string
     {
         if (!class_exists(\ZipArchive::class)) {
@@ -41,92 +48,149 @@ final class ThemeManager
         if ($zip->open($tmpZipPath, \ZipArchive::RDONLY) !== true) {
             throw new \RuntimeException('Not a valid zip archive.');
         }
+        $stage = null;
+        $reserved = null;
+        try {
+            if ($zip->numFiles < 1 || $zip->numFiles > 1000) {
+                throw new \RuntimeException('Theme archives must contain 1–1000 entries.');
+            }
+            $entries = [];
+            $layouts = [];
+            $total = 0;
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $stat = $zip->statIndex($i);
+                if ($stat === false) {
+                    throw new \RuntimeException('Could not inspect archive entry.');
+                }
+                $entry = $stat['name'];
+                $path = rtrim($entry, '/');
+                $parts = explode('/', $path);
+                if ($path === '' || preg_match('/[\x00-\x1f\x7f\\\\:]/', $entry)
+                    || in_array('', $parts, true) || in_array('.', $parts, true) || in_array('..', $parts, true)
+                    || isset($entries[$path])) {
+                    throw new \RuntimeException('Unsafe or duplicate archive path.');
+                }
+                $opsys = $attrs = 0;
+                if (!$zip->getExternalAttributesIndex($i, $opsys, $attrs)) {
+                    throw new \RuntimeException('Could not inspect archive file type.');
+                }
+                $type = ($attrs >> 16) & 0170000;
+                if ($opsys === \ZipArchive::OPSYS_UNIX && !in_array($type, [0, 0100000, 0040000], true)) {
+                    throw new \RuntimeException('Symlinks and special files are not allowed in themes.');
+                }
+                $size = $stat['size'];
+                $total += $size;
+                if ($size < 0 || $size > 2 * 1024 * 1024 || $total > 20 * 1024 * 1024) {
+                    throw new \RuntimeException('Theme exceeds the 2 MiB file or 20 MiB total size limit.');
+                }
+                $directory = str_ends_with($entry, '/');
+                if ($type === 0040000 && !$directory) {
+                    throw new \RuntimeException('Inconsistent archive directory entry.');
+                }
+                $entries[$path] = ['index' => $i, 'size' => $size, 'directory' => $directory];
+                if (!$directory && ($path === 'layout.php' || preg_match('#^[A-Za-z0-9._-]+/layout\.php$#D', $path))) {
+                    $layouts[] = $path;
+                }
+            }
+            if (count($layouts) !== 1) {
+                throw new \RuntimeException('Exactly one theme root containing layout.php is required.');
+            }
+            $prefix = $layouts[0] === 'layout.php' ? '' : dirname($layouts[0]) . '/';
+            foreach ($entries as $path => $meta) {
+                $path = (string)$path;
+                if ($prefix !== '' && !str_starts_with($path, $prefix)
+                    && !($meta['directory'] && $path === rtrim($prefix, '/'))) {
+                    throw new \RuntimeException('Archive contains files outside its theme root.');
+                }
+                for ($parent = dirname($path); $parent !== '.'; $parent = dirname($parent)) {
+                    if (isset($entries[$parent]) && !$entries[$parent]['directory']) {
+                        throw new \RuntimeException('Archive contains conflicting file and directory paths.');
+                    }
+                }
+            }
 
-        // 1) find layout.php at depth <= 1 (theme root, or wrapped in exactly one folder)
-        $layoutEntry = null;
-        $prefix = '';
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $name = $zip->getNameIndex($i);
-            if ($name === 'layout.php') {
-                $layoutEntry = $name;
-                $prefix = '';
-                break;
+            $themes = App::rootDir() . '/themes';
+            $stage = App::rootDir() . '/var/.theme-install-' . bin2hex(random_bytes(12));
+            if (!mkdir($stage, 0700, true)) {
+                throw new \RuntimeException('Could not create theme staging directory.');
             }
-            if (preg_match('#^([A-Za-z0-9._-]+)/layout\.php$#', $name, $m)) {
-                $layoutEntry = $name;
-                $prefix = $m[1] . '/';
-                break;
+            $allowed = ['php', 'css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'woff', 'woff2', 'ttf', 'ico'];
+            foreach ($entries as $path => $meta) {
+                $path = (string)$path;
+                $rel = substr($path, strlen($prefix));
+                $ext = strtolower(pathinfo($rel, PATHINFO_EXTENSION));
+                if ($meta['directory'] || !in_array($ext, $allowed, true)) {
+                    continue;
+                }
+                $dest = $stage . '/' . $rel;
+                if (!is_dir(dirname($dest)) && !mkdir(dirname($dest), 0755, true)) {
+                    throw new \RuntimeException('Could not create template directory.');
+                }
+                // Cap decompression too, rather than trusting ZIP metadata alone.
+                $data = $zip->getFromIndex($meta['index'], 2 * 1024 * 1024 + 1);
+                if ($data === false || strlen($data) !== $meta['size'] || file_put_contents($dest, $data) !== strlen($data)) {
+                    throw new \RuntimeException('Could not extract complete theme file.');
+                }
+                if ($ext === 'php') self::lintPhp($dest);
             }
-        }
-        if ($layoutEntry === null) {
+            if (!is_file($stage . '/layout.php')) {
+                throw new \RuntimeException('Theme archive contained no usable layout.php.');
+            }
+            $base = $prefix !== '' ? rtrim($prefix, '/') : pathinfo(basename($tmpZipPath), PATHINFO_FILENAME);
+            $base = preg_replace('/[^a-zA-Z0-9_-]/', '-', $base) ?: 'theme';
+            $name = $base;
+            for ($suffix = 2; ; $suffix++) {
+                $dest = $themes . '/' . $name;
+                // Reserve atomically: never overwrite even an empty or invalid existing directory.
+                if (@mkdir($dest, 0755)) {
+                    $reserved = $dest;
+                    break;
+                }
+                if (!file_exists($dest) && !is_link($dest)) {
+                    throw new \RuntimeException('Could not reserve theme directory.');
+                }
+                $name = $base . '-' . $suffix;
+            }
+            if (!chmod($stage, 0755) || !rename($stage, $reserved)) {
+                throw new \RuntimeException('Could not publish validated theme.');
+            }
+            $stage = $reserved = null;
+            return $name;
+        } finally {
             $zip->close();
-            throw new \RuntimeException('No layout.php found: not a Disco nunu theme.');
+            if ($stage !== null && is_dir($stage)) self::rrmdir($stage);
+            if ($reserved !== null && is_dir($reserved)) self::rrmdir($reserved);
         }
+    }
 
-        // Name = the zip's single top-level folder, else the archive file name.
-        if ($prefix !== '') {
-            $name = basename(rtrim($prefix, '/'));
-        } else {
-            $name = pathinfo(basename($tmpZipPath), PATHINFO_FILENAME); // e.g. "mytheme.zip" -> "mytheme"
+    private static function phpCliBinary(string $sapi): string
+    {
+        // Under FPM PHP_BINARY points to php-fpm, which cannot lint source files.
+        $binary = in_array($sapi, ['cli', 'cli-server'], true) ? PHP_BINARY : PHP_BINDIR . '/php';
+        if (!is_executable($binary)) {
+            throw new \RuntimeException('A PHP CLI executable is required for theme syntax validation.');
         }
-        if ($name === '' || $name === '.' || $name === '/') {
-            $name = 'theme-' . substr(hash('sha256', (string)file_get_contents($tmpZipPath)), 0, 8);
-        }
-        // sanitize + collision
-        $name = preg_replace('/[^a-zA-Z0-9_-]/', '-', $name) ?? 'theme';
-        $base = $name;
-        for ($i = 2; self::exists($name); $i++) {
-            $name = $base . '-' . $i;
-        }
+        return $binary;
+    }
 
-        $destRoot = App::rootDir() . '/themes/' . $name;
-        if (!mkdir($destRoot, 0775, true)) {
-            $zip->close();
-            throw new \RuntimeException('Could not create theme directory.');
+    /** Syntax checking never executes the template or its includes. */
+    private static function lintPhp(string $file): void
+    {
+        if (!function_exists('proc_open')) {
+            throw new \RuntimeException('PHP syntax validation requires proc_open.');
         }
-
-        // 2) extract whitelisted files only, no traversal, size caps
-        $allowed = ['php', 'css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'woff', 'woff2', 'ttf', 'ico'];
-        $count = 0;
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $entry = (string)$zip->getNameIndex($i);
-            if (str_ends_with($entry, '/')) {
-                continue; // directory entry
-            }
-            if (str_contains($entry, '..') || str_starts_with($entry, '/') || preg_match('#^[a-zA-Z]:#', $entry)) {
-                continue; // zip-slip attempt: skip silently
-            }
-            if ($prefix !== '' && !str_starts_with($entry, $prefix)) {
-                continue; // outside the theme root folder
-            }
-            $rel  = $prefix !== '' ? substr($entry, strlen($prefix)) : $entry;
-            $ext  = strtolower(pathinfo($rel, PATHINFO_EXTENSION));
-            if (!in_array($ext, $allowed, true)) {
-                continue;
-            }
-            $stat = $zip->statName($entry);
-            if (is_array($stat) && ($stat['size'] ?? 0) > 2 * 1024 * 1024) {
-                continue; // >2 Mo par fichier : skip
-            }
-            $dest = $destRoot . '/' . $rel;
-            $destDir = dirname($dest);
-            if (!is_dir($destDir)) {
-                mkdir($destDir, 0775, true);
-            }
-            $data = $zip->getFromIndex($i);
-            if ($data !== false) {
-                file_put_contents($dest, $data);
-                $count++;
-            }
+        $process = proc_open([self::phpCliBinary(PHP_SAPI), '-n', '-l', $file], [
+            0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['redirect', 1],
+        ], $pipes);
+        if (!is_resource($process)) {
+            throw new \RuntimeException('Could not start PHP syntax validation.');
         }
-        $zip->close();
-
-        if ($count === 0 || !is_file($destRoot . '/layout.php')) {
-            // rollback: empty or unusable theme
-            self::removeTheme($name);
-            throw new \RuntimeException('Theme archive contained no usable files.');
+        fclose($pipes[0]);
+        stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        if (proc_close($process) !== 0) {
+            throw new \RuntimeException('Invalid PHP syntax in theme file: ' . basename($file));
         }
-        return $name;
     }
 
     public static function removeTheme(string $name): bool
@@ -134,7 +198,9 @@ final class ThemeManager
         if (!preg_match('/^[a-zA-Z0-9_-]+$/', $name)) {
             return false;
         }
-        $dir = realpath(App::rootDir() . '/themes/' . $name);
+        $path = App::rootDir() . '/themes/' . $name;
+        if (is_link($path)) return false;
+        $dir = realpath($path);
         $root = realpath(App::rootDir() . '/themes');
         if ($dir === false || $root === false || !str_starts_with($dir, $root . DIRECTORY_SEPARATOR)) {
             return false;
@@ -146,9 +212,7 @@ final class ThemeManager
     private static function rrmdir(string $dir): void
     {
         foreach (scandir($dir) ?: [] as $f) {
-            if ($f === '.' || $f === '..') {
-                continue;
-            }
+            if ($f === '.' || $f === '..') continue;
             $p = $dir . '/' . $f;
             is_dir($p) && !is_link($p) ? self::rrmdir($p) : @unlink($p);
         }

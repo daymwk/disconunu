@@ -41,12 +41,12 @@ final class Acl
 
     /**
      * Post-level ACL.
-     * - edit: admins can edit anything; writers only their own posts.
+     * - edit: admins can edit anything; writers only their own drafts.
      * - delete: admins anything except deleting another superadmin's post (only superadmin can);
-     *   writers can delete their own posts (drafts or not — it's their content).
+     *   writers can delete only their own drafts.
      * - set published status: admins+ only (enforced in the save route).
      */
-    public static function canEditPost(?User $u, int $authorId, string $authorRole = ''): bool
+    public static function canEditPost(?User $u, int $authorId, string $authorRole = '', string $status = 'draft'): bool
     {
         if ($u === null) {
             return false;
@@ -54,10 +54,10 @@ final class Acl
         if ($u->role === self::SUPERADMIN || $u->role === self::ADMIN) {
             return true; // admins edit everything
         }
-        return $u->id === $authorId; // writer : own posts only
+        return $u->role === self::WRITER && $u->id === $authorId && $status === 'draft';
     }
 
-    public static function canDeletePost(?User $u, ?string $authorRole = null, ?int $authorId = null): bool
+    public static function canDeletePost(?User $u, ?string $authorRole = null, ?int $authorId = null, string $status = 'draft'): bool
     {
         if ($u === null) {
             return false;
@@ -69,7 +69,7 @@ final class Acl
             // an admin may delete anything except another superadmin's post
             return $authorRole !== self::SUPERADMIN;
         }
-        return $authorId !== null && $u->id === $authorId; // writer : own only
+        return $u->role === self::WRITER && $authorId !== null && $u->id === $authorId && $status === 'draft';
     }
 
     /** User management: superadmin only. */

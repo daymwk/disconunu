@@ -34,50 +34,77 @@ final class Security
         return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
     }
 
-    /**
-     * Nettoyage du contenu riche des posts : allowlist de balises, strip des
-     * on* event handlers, javascript: URLs, tracking attributes. (HTML Purifier would be
-     * ideal; this strict allowlist is the reasonable no-dependency baseline.)
-     */
+    /** Parse untrusted rich text and rebuild only inert, explicitly allowed HTML. */
     public static function sanitizeHtml(string $html): string
     {
-        $allowed = '<p><br><b><strong><i><em><u><s><a><ul><ol><li><blockquote><pre><code>'
-                 . '<h2><h3><h4><h5><h6><img><figure><figcaption><table><thead><tbody><tr><th><td><hr>';
-        $html = strip_tags($html, $allowed);
+        if ($html === '') {
+            return '';
+        }
+        $doc = new \DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $loaded = $doc->loadHTML(
+                '<!doctype html><html><head><meta charset="UTF-8"></head><body>' . $html . '</body></html>',
+                LIBXML_NONET
+            );
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+        if (!$loaded) {
+            return '';
+        }
 
-        // strip dangerous attributes (on* handlers, expression() styles, javascript: URLs)
-        $html = preg_replace_callback(
-            '#<(\w+)\b([^>]*)>#i',
-            static function (array $m): string {
-                [$tagFull, $tag, $attrs] = $m;
-                $clean = [];
-                if (preg_match_all('/(\w+)\s*=\s*("([^"]*)"|\'([^\']*)\'|([^\s"\'>]+))/', $attrs, $am, PREG_SET_ORDER)) {
-                    foreach ($am as $a) {
-                        $name  = strtolower($a[1]);
-                        $value = $a[3] !== '' ? $a[3] : ($a[4] !== '' ? $a[4] : ($a[5] ?? ''));
-                        if (str_starts_with($name, 'on')) {
-                            continue;
-                        }
-                        if ($name === 'href' || $name === 'src') {
-                            $v = strtolower(str_replace(["\t", "\n", "\r"], '', $value));
-                            $v = preg_replace('/\s+/', '', $v) ?? '';
-                            if (preg_match('/^(javascript|vbscript|data):/i', ltrim($v))) {
-                                continue;
-                            }
-                        }
-                        if ($name === 'style') {
-                            continue; // trop de vecteurs pour un CMS minimaliste
-                        }
-                        $clean[] = $name . '="' . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . '"';
+        $tags = ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 's', 'a', 'ul', 'ol', 'li',
+            'blockquote', 'pre', 'code', 'h2', 'h3', 'h4', 'h5', 'h6', 'img', 'figure',
+            'figcaption', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr'];
+        // Never unwrap raw-text, foreign-content or interactive subtrees into HTML.
+        $drop = ['head', 'script', 'style', 'svg', 'math', 'template', 'noscript', 'iframe',
+            'object', 'embed', 'form', 'input', 'button', 'select', 'textarea', 'title',
+            'xmp', 'plaintext', 'noembed', 'noframes'];
+        $render = static function (\DOMNode $node) use (&$render, $tags, $drop): string {
+            if ($node instanceof \DOMText) {
+                return self::e($node->nodeValue);
+            }
+            if (!$node instanceof \DOMElement && !$node instanceof \DOMDocument) {
+                return '';
+            }
+            $tag = strtolower($node->nodeName);
+            if (in_array($tag, $drop, true)) {
+                return '';
+            }
+            $body = '';
+            foreach ($node->childNodes as $child) {
+                $body .= $render($child);
+            }
+            if (!in_array($tag, $tags, true)) {
+                return $body;
+            }
+            $allowedAttrs = match ($tag) {
+                'a' => ['href', 'title'],
+                'img' => ['src', 'alt', 'title', 'width', 'height'],
+                'td', 'th' => ['colspan', 'rowspan'],
+                default => [],
+            };
+            $attrs = '';
+            foreach ($allowedAttrs as $name) {
+                if (!$node->hasAttribute($name)) {
+                    continue;
+                }
+                $value = $node->getAttribute($name);
+                if ($name === 'href' || $name === 'src') {
+                    // The parser has decoded entities; browsers ignore these controls in schemes.
+                    $url = preg_replace('/[\x00-\x20\x7f]+/', '', $value) ?? '';
+                    if (preg_match('/^(javascript|vbscript|data):/i', $url)) {
+                        continue;
                     }
                 }
-                $selfClose = str_ends_with($tagFull, '/>') ? ' /' : '';
-                return '<' . $tag . ($clean ? ' ' . implode(' ', $clean) : '') . $selfClose . '>';
-            },
-            $html
-        ) ?? '';
-
-        return $html;
+                $attrs .= ' ' . $name . '="' . self::e($value) . '"';
+            }
+            return '<' . $tag . $attrs . '>'
+                . (in_array($tag, ['br', 'img', 'hr'], true) ? '' : $body . '</' . $tag . '>');
+        };
+        return $render($doc);
     }
 
     /** Extrait un extrait texte brut safe (extraits de liste, meta description). */

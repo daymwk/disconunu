@@ -86,6 +86,7 @@ $router->get('/', function (): void {
     $perPage = Settings::postsPerPage();
     $page    = max(1, (int)($_GET['page'] ?? 1));
     $total   = Post::countPublished();
+    $page    = min($page, max(1, (int)ceil($total / $perPage)));
     $posts   = Post::publishedPage($page, $perPage);
 
     View::render('home', [
@@ -105,6 +106,7 @@ $router->get('/category/{slug}', function (array $args): void {
     $perPage = Settings::postsPerPage();
     $page    = max(1, (int)($_GET['page'] ?? 1));
     $total   = Post::countPublishedIn($cat->id);
+    $page    = min($page, max(1, (int)ceil($total / $perPage)));
     $posts   = Post::publishedPageIn($cat->id, $page, $perPage);
 
     View::render('category', [
@@ -176,10 +178,16 @@ $router->any('/admin/login', function (): void {
             } elseif (User::emailExists($email)) {
                 $error = 'Email already in use.';
             } else {
-                User::create($username, $email, $password, Acl::SUPERADMIN);
-                Auth::attempt($username, $password);
-                Http::flash('ok', 'Admin created. Welcome to Disco nunu.');
-                Http::redirect('/admin');
+                try {
+                    User::createFirst($username, $email, $password);
+                    Auth::attempt($username, $password);
+                    Http::flash('ok', 'Admin created. Welcome to Disco nunu.');
+                    Http::redirect('/admin');
+                } catch (\RuntimeException $e) {
+                    $noUsers = User::countAll() === 0;
+                    if ($noUsers) throw $e;
+                    $error = 'Initial setup has already been completed. Please sign in.';
+                }
             }
         } elseif (Auth::attempt(trim((string)($_POST['username'] ?? '')), (string)($_POST['password'] ?? ''))) {
             Http::redirect('/admin');
@@ -201,44 +209,75 @@ $router->post('/admin/logout', function (): void {
 $router->get('/admin', function (): void {
     Auth::requireAuth();
     $u = Auth::user();
-    $posts = Acl::canPublish($u)
-        ? Post::all(500)
-        : Post::allByAuthor((int)$u->id, 500);
-
-    // Optional ?status=draft|published filter, handy once the list grows.
-    $status = in_array($_GET['status'] ?? '', ['draft', 'published'], true) ? (string)$_GET['status'] : '';
-    if ($status !== '') {
-        $posts = array_values(array_filter($posts, static fn(Post $x): bool => $x->status === $status));
-    }
-
-    View::render('admin/dashboard', ['posts' => $posts, 'status' => $status, 'title' => 'Admin']);
+    $data = Post::adminPage($_GET, Acl::canPublish($u) ? null : (int)$u->id);
+    View::render('admin/dashboard', $data + [
+        'categories' => Category::all(),
+        'authors' => Acl::canPublish($u) ? User::all() : [$u],
+        'title' => 'Admin',
+    ]);
 });
+
+function requirePathId(string $value): int
+{
+    $id = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    if (!preg_match('/^[1-9][0-9]*$/D', $value) || $id === false) {
+        Http::abort(400, 'Invalid ID.');
+    }
+    return $id;
+}
+
+// Retain invalid submissions only in the authenticated session, never in the database.
+function renderPostEditor(?Post $post): void
+{
+    $id = $post?->id ?? 0;
+    $selectedCatIds = $id ? array_map(static fn(Category $c): int => $c->id, Category::forPost($id)) : [];
+    $form = $_SESSION['post_form'][$id] ?? null;
+    unset($_SESSION['post_form'][$id]);
+    if (is_array($form)) {
+        $post ??= new Post(['id' => 0, 'user_id' => Auth::user()->id, 'title' => '', 'slug' => '',
+            'excerpt' => '', 'content' => '', 'status' => 'draft', 'published_at' => null, 'updated_at' => null]);
+        $post->title = $form['title'];
+        $post->content = $form['content'];
+        $post->status = $form['status'];
+        $selectedCatIds = $form['categories'];
+    }
+    View::render('admin/post-edit', [
+        'post' => $post, 'cats' => Category::all(), 'selectedCatIds' => $selectedCatIds,
+        'myCats' => $selectedCatIds, 'title' => $id ? 'Edit — ' . $post->title : 'New post',
+    ]);
+}
 
 // ---------- Admin: posts ----------
 $router->get('/admin/post/new', function (): void {
     Auth::requireAuth();
-    View::render('admin/post-edit', [
-        'post'   => null,
-        'cats'   => Category::all(),
-        'title'  => 'New post',
-    ]);
+    renderPostEditor(null);
 });
 
 $router->get('/admin/post/{id}/edit', function (array $args): void {
     Auth::requireAuth();
-    $post = Post::findById((int)$args['id']);
+    $post = Post::findById(requirePathId($args['id']));
     if ($post === null) {
         Http::abort(404);
     }
-    if (!Acl::canEditPost(Auth::user(), $post->userId)) {
+    if (!Acl::canEditPost(Auth::user(), $post->userId, $post->authorRole ?? '', $post->status)) {
         Http::abort(403, 'You cannot edit this post.');
     }
-    View::render('admin/post-edit', [
-        'post'    => $post,
-        'cats'    => Category::all(),
-        'myCats'  => array_map(static fn(Category $c): int => $c->id, Category::forPost($post->id)),
-        'title'   => 'Edit — ' . $post->title,
-    ]);
+    renderPostEditor($post);
+});
+
+$router->get('/admin/post/{id}/preview', function (array $args): void {
+    Auth::requireAuth();
+    $post = Post::findById(requirePathId($args['id']));
+    if ($post === null) {
+        Http::abort(404);
+    }
+    $user = Auth::user();
+    if (!Acl::canPublish($user) && $post->userId !== $user->id) {
+        Http::abort(403, 'You cannot preview this post.');
+    }
+    header('Cache-Control: private, no-store');
+    header('X-Robots-Tag: noindex, nofollow');
+    View::render('post', ['post' => $post, 'cats' => Category::visible(), 'title' => 'Preview — ' . $post->title, 'isPreview' => true]);
 });
 
 $router->post('/admin/post/save', function (): void {
@@ -248,7 +287,17 @@ $router->post('/admin/post/save', function (): void {
     }
 
     $u       = Auth::user();
-    $id      = (int)($_POST['id'] ?? 0);
+    $id = filter_var($_POST['id'] ?? '0', FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+    if ($id === false) {
+        Http::abort(400, 'Invalid post ID.');
+    }
+    $post = $id > 0 ? Post::findById($id) : null;
+    if ($id > 0 && $post === null) {
+        Http::abort(404);
+    }
+    if ($post !== null && !Acl::canEditPost($u, $post->userId, $post->authorRole ?? '', $post->status)) {
+        Http::abort(403, 'You cannot edit this post.');
+    }
     $title   = trim((string)($_POST['title'] ?? ''));
     $content = Security::sanitizeHtml((string)($_POST['content'] ?? ''));
     $excerpt = Security::excerpt($content, 280);
@@ -260,18 +309,18 @@ $router->post('/admin/post/save', function (): void {
     }
 
     if ($title === '' || $content === '') {
+        $_SESSION['post_form'][$id] = [
+            'title' => (string)($_POST['title'] ?? ''),
+            'content' => (string)($_POST['content'] ?? ''),
+            'status' => $status,
+            'categories' => array_map('intval', (array)($_POST['categories'] ?? [])),
+        ];
         Http::flash('error', 'Title and content are required.');
         Http::redirect($id ? "/admin/post/{$id}/edit" : '/admin/post/new');
     }
 
-    if ($id > 0) {
-        $post = Post::findById($id);
-        if ($post === null) {
-            Http::abort(404);
-        }
-        if (!Acl::canEditPost($u, $post->userId)) {
-            Http::abort(403, 'You cannot edit this post.');
-        }
+    unset($_SESSION['post_form'][$id]);
+    if ($post !== null) {
         $post->update($title, $content, $excerpt, $status);
         Http::flash('ok', 'Post updated.');
     } else {
@@ -292,7 +341,7 @@ $router->post('/admin/post/save', function (): void {
         }
     }
     Category::setPostCategories($post->id, $catIds);
-    Http::redirect('/admin');
+    Http::redirect(($_POST['save_action'] ?? '') === 'continue' ? "/admin/post/{$post->id}/edit" : '/admin');
 });
 
 $router->post('/admin/post/{id}/delete', function (array $args): void {
@@ -300,12 +349,12 @@ $router->post('/admin/post/{id}/delete', function (array $args): void {
     if (!Security::checkCsrf($_POST['csrf'] ?? null)) {
         Http::abort(400, 'Invalid CSRF token.');
     }
-    $post   = Post::findById((int)$args['id']);
+    $post   = Post::findById(requirePathId($args['id']));
     if ($post === null) {
         Http::abort(404);
     }
     $author = User::findById($post->userId);
-    if (!Acl::canDeletePost(Auth::user(), $author?->role, $post->userId)) {
+    if (!Acl::canDeletePost(Auth::user(), $author?->role, $post->userId, $post->status)) {
         Http::abort(403, 'You cannot delete this post.');
     }
     $post->delete();
@@ -319,15 +368,21 @@ $router->get('/admin/categories', function (): void {
     if (!Acl::canManageCategories(Auth::user())) {
         Http::abort(403, 'Admins and superadmins only.');
     }
-    View::render('admin/categories', ['cats' => Category::all(), 'title' => 'Categories']);
+    View::render('admin/categories', Category::adminPage($_GET) + ['title' => 'Categories']);
 });
 
 $router->post('/admin/categories/save', function (): void {
     Auth::requireAuth();
-    if (!Acl::canManageCategories(Auth::user()) || !Security::checkCsrf($_POST['csrf'] ?? null)) {
-        Http::abort(400, 'Invalid request.');
+    if (!Acl::canManageCategories(Auth::user())) {
+        Http::abort(403, 'Admins and superadmins only.');
     }
-    $id    = (int)($_POST['id'] ?? 0);
+    if (!Security::checkCsrf($_POST['csrf'] ?? null)) {
+        Http::abort(400, 'Invalid CSRF token.');
+    }
+    $id = filter_var($_POST['id'] ?? '0', FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+    if ($id === false) {
+        Http::abort(400, 'Invalid category ID.');
+    }
     $title = trim((string)($_POST['title'] ?? ''));
     if ($title === '') {
         Http::flash('error', 'Category title is required.');
@@ -336,9 +391,10 @@ $router->post('/admin/categories/save', function (): void {
     $visible = isset($_POST['visible']);
     if ($id > 0) {
         $cat = Category::byId($id);
-        if ($cat !== null) {
-            $cat->update($title, $visible);
+        if ($cat === null) {
+            Http::abort(404, 'Category not found.');
         }
+        $cat->update($title, $visible);
     } else {
         Category::create($title, trim((string)($_POST['slug'] ?? '')) ?: null, $visible);
     }
@@ -348,14 +404,25 @@ $router->post('/admin/categories/save', function (): void {
 
 $router->post('/admin/categories/{id}/delete', function (array $args): void {
     Auth::requireAuth();
-    if (!Acl::canManageCategories(Auth::user()) || !Security::checkCsrf($_POST['csrf'] ?? null)) {
-        Http::abort(400, 'Invalid request.');
+    if (!Acl::canManageCategories(Auth::user())) {
+        Http::abort(403, 'Admins and superadmins only.');
     }
-    $cat = Category::byId((int)$args['id']);
-    if ($cat !== null) {
-        $cat->delete();
-        Http::flash('ok', 'Category deleted (posts keep existing, uncategorized).');
+    if (!Security::checkCsrf($_POST['csrf'] ?? null)) {
+        Http::abort(400, 'Invalid CSRF token.');
     }
+    $id = filter_var($args['id'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    if ($id === false) {
+        Http::abort(400, 'Invalid category ID.');
+    }
+    $cat = Category::byId($id);
+    if ($cat === null) {
+        Http::abort(404, 'Category not found.');
+    }
+    if ($cat->slug === 'general') {
+        Http::abort(403, 'The general category cannot be deleted.');
+    }
+    $cat->delete();
+    Http::flash('ok', 'Category deleted; uncategorized posts moved to General.');
     Http::redirect('/admin/categories');
 });
 
@@ -366,12 +433,24 @@ $router->any('/admin/settings', function (): void {
         if (!Security::checkCsrf($_POST['csrf'] ?? null)) {
             Http::abort(400, 'Invalid CSRF token.');
         }
-        Settings::set('site_title', trim((string)($_POST['site_title'] ?? '')));
-        Settings::set('site_tagline', trim((string)($_POST['site_tagline'] ?? '')));
-        Settings::set('footer_text', trim((string)($_POST['footer_text'] ?? '')));
-        Settings::set('posts_per_page', (string)max(1, min(50, (int)($_POST['posts_per_page'] ?? 5))));
-        Settings::set('rss_enabled', isset($_POST['rss_enabled']) ? '1' : '0');
-        Settings::set('theme', (string)($_POST['theme'] ?? ''));
+        if (array_key_exists('theme', $_POST)
+            && (!is_string($_POST['theme']) || !ThemeManager::exists($_POST['theme']))) {
+            Http::abort(400, 'Invalid theme.');
+        }
+        foreach (['site_title', 'site_tagline', 'footer_text'] as $key) {
+            if (array_key_exists($key, $_POST)) {
+                Settings::set($key, trim((string)$_POST[$key]));
+            }
+        }
+        if (array_key_exists('posts_per_page', $_POST)) {
+            Settings::set('posts_per_page', (string)max(1, min(50, (int)$_POST['posts_per_page'])));
+        }
+        if (array_key_exists('rss_enabled', $_POST)) {
+            Settings::set('rss_enabled', $_POST['rss_enabled'] === '1' ? '1' : '0');
+        }
+        if (array_key_exists('theme', $_POST)) {
+            Settings::set('theme', $_POST['theme']);
+        }
         Http::flash('ok', 'Settings saved.');
         Http::redirect('/admin/settings');
     }
@@ -402,19 +481,28 @@ $router->any('/admin/logo', function (): void {
             Http::redirect('/admin/settings');
         }
         $mime = (new finfo(FILEINFO_MIME_TYPE))->file($f['tmp_name']) ?: '';
-        $allowed = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp', 'image/svg+xml' => 'svg'];
-        if (!isset($allowed[$mime]) || $f['size'] > 512 * 1024) {
-            Http::flash('error', 'Invalid logo: PNG/JPEG/GIF/WebP/SVG only, max 512 Ko.');
+        $allowed = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp'];
+        $image = @getimagesize($f['tmp_name']);
+        $size = filesize($f['tmp_name']);
+        if (!isset($allowed[$mime]) || $size === false || $size > 512 * 1024
+            || $image === false || ($image['mime'] ?? '') !== $mime || $image[0] < 1 || $image[1] < 1) {
+            Http::flash('error', 'Invalid logo: PNG/JPEG/GIF/WebP only, max 512 KiB.');
             Http::redirect('/admin/settings');
         }
         $dir = App::rootDir() . '/var/uploads';
-        if (!is_dir($dir)) {
-            mkdir($dir, 0775, true);
+        $staged = false;
+        $target = $dir . '/logo.' . $allowed[$mime];
+        if ((is_dir($dir) || @mkdir($dir, 0775, true)) && ($staged = @tempnam($dir, '.logo-')) !== false
+            && @move_uploaded_file($f['tmp_name'], $staged) && @chmod($staged, 0644) && @rename($staged, $target)) {
+            // Only remove the old extension after the replacement has succeeded.
+            foreach (glob($dir . '/logo.*') ?: [] as $old) {
+                if ($old !== $target && is_file($old)) @unlink($old);
+            }
+        } else {
+            if ($staged !== false && is_file($staged)) @unlink($staged);
+            Http::flash('error', 'Could not save logo. The previous logo was kept.');
+            Http::redirect('/admin/settings');
         }
-        foreach (glob($dir . '/logo.*') ?: [] as $old) {
-            @unlink($old);
-        }
-        move_uploaded_file($f['tmp_name'], $dir . '/logo.' . $allowed[$mime]);
         Http::flash('ok', 'Logo updated.');
         Http::redirect('/admin/settings');
     }
@@ -433,17 +521,63 @@ $router->post('/admin/theme', function (): void {
         Http::redirect('/admin/settings');
     }
     if (($f['error'] ?? UPLOAD_ERR_OK) === UPLOAD_ERR_INI_SIZE || $f['size'] > 5 * 1024 * 1024) {
-        Http::flash('error', 'Archive too large (max 5 Mo).');
+        Http::flash('error', 'Archive too large (max 5 MiB).');
         Http::redirect('/admin/settings');
     }
     try {
         $name = ThemeManager::installFromZip((string)$f['tmp_name']);
-        Settings::set('theme', $name);
-        Http::flash('ok', "Theme “{$name}” installed and activated.");
+        if (($_POST['activate'] ?? '') === '1') {
+            if (!ThemeManager::exists($name)) {
+                Http::abort(400, 'Invalid theme.');
+            }
+            Settings::set('theme', $name);
+            Http::flash('ok', "Theme “{$name}” installed and activated.");
+        } else {
+            Http::flash('ok', "Theme “{$name}” installed. Activate it in Settings when ready.");
+        }
     } catch (\RuntimeException $e) {
         Http::flash('error', 'Theme install failed: ' . $e->getMessage());
     }
     Http::redirect('/admin/settings');
+});
+
+$router->get('/admin/theme/starter', function (): void {
+    Auth::requireSuperAdmin();
+    if (!class_exists(ZipArchive::class)) {
+        Http::abort(503, 'ZIP support is unavailable.');
+    }
+    $source = App::rootDir() . '/examples/starter-theme';
+    if (!is_dir($source)) {
+        Http::abort(404, 'Starter theme is unavailable.');
+    }
+    $tmp = tempnam(sys_get_temp_dir(), 'dn-starter-');
+    if ($tmp === false) {
+        Http::abort(500, 'Could not create starter archive.');
+    }
+    try {
+        $zip = new ZipArchive();
+        if ($zip->open($tmp, ZipArchive::OVERWRITE) !== true) {
+            throw new RuntimeException('Could not create starter archive.');
+        }
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($source, FilesystemIterator::SKIP_DOTS)) as $file) {
+            if ($file->isFile() && !$file->isLink()) {
+                $name = 'starter-theme/' . substr($file->getPathname(), strlen($source) + 1);
+                if (!$zip->addFile($file->getPathname(), $name)) {
+                    throw new RuntimeException('Could not add starter file.');
+                }
+            }
+        }
+        if (!$zip->close()) {
+            throw new RuntimeException('Could not finish starter archive.');
+        }
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="starter-theme.zip"');
+        header('Content-Length: ' . filesize($tmp));
+        header('Cache-Control: private, no-store');
+        readfile($tmp);
+    } finally {
+        unlink($tmp);
+    }
 });
 
 // ---------- Admin: theme uninstall (superadmin) ----------
@@ -470,8 +604,7 @@ $router->post('/admin/theme/{name}/delete', function (array $args): void {
 // ---------- Admin: users (superadmin) ----------
 $router->get('/admin/users', function (): void {
     Auth::requireSuperAdmin();
-    View::render('admin/users', [
-        'users'            => User::all(),
+    View::render('admin/users', User::adminPage($_GET) + [
         'superadminCount'  => User::countByRole(Acl::SUPERADMIN),
         'title'            => 'Users',
     ]);
@@ -510,7 +643,7 @@ $router->post('/admin/users/{id}/delete', function (array $args): void {
         Http::abort(400, 'Invalid CSRF token.');
     }
     $me     = Auth::user();
-    $target = User::findById((int)$args['id']);
+    $target = User::findById(requirePathId($args['id']));
     if ($target === null) {
         Http::abort(404);
     }
@@ -523,12 +656,12 @@ $router->post('/admin/users/{id}/delete', function (array $args): void {
 });
 
 $router->post('/admin/users/{id}/role', function (array $args): void {
-    Auth::requireAdmin();
+    Auth::requireSuperAdmin();
     if (!Security::checkCsrf($_POST['csrf'] ?? null)) {
         Http::abort(400, 'Invalid CSRF token.');
     }
     $me  = Auth::user();
-    $tgt = User::findById((int)$args['id']);
+    $tgt = User::findById(requirePathId($args['id']));
     $role = (string)($_POST['role'] ?? '');
     if ($tgt === null || !Acl::isValidRole($role)) {
         Http::abort(400, 'Invalid user or role.');

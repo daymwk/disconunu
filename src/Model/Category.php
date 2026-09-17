@@ -48,6 +48,21 @@ final class Category
         return array_map(static fn(array $r): self => new self($r), $rows);
     }
 
+    public static function adminPage(array $input = []): array
+    {
+        $q = \DN\Pagination::text($input, 'q');
+        $visibility = \DN\Pagination::text($input, 'visibility');
+        $visibility = in_array($visibility, ['visible', 'hidden'], true) ? $visibility : '';
+        $where = ['1=1']; $bind = [];
+        if ($q !== '') {
+            $where[] = "(title LIKE ? ESCAPE '!' OR slug LIKE ? ESCAPE '!')";
+            $bind = array_fill(0, 2, \DN\Pagination::like($q));
+        }
+        if ($visibility !== '') { $where[] = 'visible = ?'; $bind[] = $visibility === 'visible' ? 1 : 0; }
+        return \DN\Pagination::query('SELECT *', 'FROM dn_category WHERE ' . implode(' AND ', $where),
+            'sort_order, id', $bind, $input, compact('q', 'visibility'), '/admin/categories', 'cats', static fn(array $r): self => new self($r));
+    }
+
     /** @return list<self> visible only, for the public nav */
     public static function visible(): array
     {
@@ -91,21 +106,34 @@ final class Category
 
     public function delete(): void
     {
+        if ($this->slug === 'general') return;
         $pdo = Database::get()->pdo();
         $pdo->prepare('DELETE FROM dn_post_category WHERE category_id = ?')->execute([$this->id]);
         $pdo->prepare('DELETE FROM dn_category WHERE id = ?')->execute([$this->id]);
+        $general = self::bySlug('general');
+        if ($general !== null) {
+            $pdo->prepare('INSERT INTO dn_post_category (post_id, category_id) SELECT p.id, ? FROM dn_post p WHERE NOT EXISTS (SELECT 1 FROM dn_post_category pc WHERE pc.post_id = p.id)')->execute([$general->id]);
+        }
     }
 
     /** @param list<int> $ids replace all category assignments of a post */
     public static function setPostCategories(int $postId, array $ids): void
     {
         $pdo = Database::get()->pdo();
-        $pdo->prepare('DELETE FROM dn_post_category WHERE post_id = ?')->execute([$postId]);
-        $ins = $pdo->prepare('INSERT INTO dn_post_category (post_id, category_id) VALUES (?,?)');
-        foreach (array_unique(array_map('intval', $ids)) as $cid) {
-            if ($cid > 0) {
-                $ins->execute([$postId, $cid]);
-            }
+        $valid = array_values(array_filter(array_unique(array_map('intval', $ids)), static fn(int $id): bool => $id > 0 && self::byId($id) !== null));
+        if ($valid === []) {
+            $general = self::bySlug('general') ?? self::create('General', 'general');
+            $valid = [$general->id];
+        }
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare('DELETE FROM dn_post_category WHERE post_id = ?')->execute([$postId]);
+            $ins = $pdo->prepare('INSERT INTO dn_post_category (post_id, category_id) VALUES (?,?)');
+            foreach ($valid as $cid) $ins->execute([$postId, $cid]);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
         }
     }
 

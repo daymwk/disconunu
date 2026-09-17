@@ -4,8 +4,11 @@ declare(strict_types=1);
 /**
  * Demo seeder: fills the database with 200 sample posts.
  *
- * Idempotent: it only creates what is missing to reach 200, so re-running it is
- * safe. Posts go through the Post model (slug generation + FTS triggers) and are
+ * Without --reset, only creates the posts missing from the requested total.
+ * Use a disposable development database: this script runs migrations, and
+ * --reset deletes ALL posts, not just demo content. Existing posts are not
+ * translated. Set DN_DB_DRIVER=sqlite and DN_DB_DATABASE to a temporary path.
+ * Posts go through the Post model (slug generation + FTS triggers) and are
  * attached to the "general" category, like any post left uncategorized.
  *
  * Usage:
@@ -45,9 +48,8 @@ if ($reset) {
 $existing = (int)$pdo->query('SELECT COUNT(*) FROM dn_post')->fetchColumn();
 $authorId = (int)($pdo->query('SELECT MIN(id) FROM dn_user')->fetchColumn() ?: 0);
 if ($authorId === 0) {
-    // No account yet: create a local author so posts have an owner.
-    $authorId = User::create('author', 'author@example.com', bin2hex(random_bytes(12)), Acl::WRITER)->id;
-    echo "created a placeholder author account (id {$authorId})\n";
+    fwrite(STDERR, "Create the first account before seeding demo posts.\n");
+    exit(1);
 }
 
 $needed = $target - $existing;
@@ -58,9 +60,9 @@ if ($needed <= 0) {
 
 $general = Category::bySlug('general') ?? Category::create('General', 'general', true);
 
-$dishes = ['ravioli', 'linguine', 'farfalline', 'risotto', 'ramen', 'tacos', 'galette', 'quiche', 'pho', 'gnocchi',
-           'pad thai', 'cassoulet', 'sushi', 'poutine', 'bouillabaisse'];
-$styles = ['grilled', 'with ratatouille', 'with pesto', 'flambéed', 'crispy', 'melting', 'with vanilla',
+$dishes = ['ravioli', 'linguine', 'farfalline', 'risotto', 'ramen', 'tacos', 'buckwheat pancake', 'savory tart', 'pho', 'gnocchi',
+           'pad thai', 'bean stew', 'sushi', 'cheese-curd fries', 'fish stew'];
+$styles = ['grilled', 'with vegetable stew', 'with pesto', 'flame-cooked', 'crispy', 'melting', 'with vanilla',
            'grandma-style', 'in a hurry', 'at midnight', 'from the sea', 'autumn', 'spicy', 'with cheese', 'in season'];
 
 for ($i = 1; $i <= $needed; $i++) {

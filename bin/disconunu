@@ -78,7 +78,7 @@ switch ($cmd) {
         $login = $argv[2] ?? null;
         $email = $argv[3] ?? null;
         $role  = parse_role($argv);
-        if (!$login || !$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if (!$login || !preg_match('/^[A-Za-z0-9_.-]{3,64}$/', $login) || !$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             fwrite(STDERR, "Usage: bin/disconunu user <login> <email> [--role=writer|admin|superadmin]\n");
             exit(1);
         }
@@ -91,8 +91,10 @@ switch ($cmd) {
             fwrite(STDERR, "Password too short (min 10).\n");
             exit(1);
         }
-        User::create($login, $email, $pw, $role);
-        echo "User created: {$login} ({$role})\n";
+        $created = User::countAll() === 0
+            ? User::createFirst($login, $email, $pw)
+            : User::create($login, $email, $pw, $role);
+        echo "User created: {$login} ({$created->role})\n";
         break;
 
     case 'password':
@@ -127,6 +129,10 @@ switch ($cmd) {
         $u = User::findByUsername($login);
         if ($u === null) {
             fwrite(STDERR, "Unknown user.\n");
+            exit(1);
+        }
+        if ($u->role === Acl::SUPERADMIN && $role !== Acl::SUPERADMIN && User::countByRole(Acl::SUPERADMIN) <= 1) {
+            fwrite(STDERR, "Cannot demote the last superadmin.\n");
             exit(1);
         }
         $u->setRole($role);

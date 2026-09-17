@@ -12,23 +12,20 @@ final class Auth
     {
         App::startSession();
 
-        // anti-brute-force : compteur en session (le strict maximal sans table ; suffisant pour le scope)
-        $sec  = App::config()['security'];
-        $key  = 'login_attempts_' . self::clientIp();
-        $now  = time();
-        $atts = &$_SESSION[$key];
-        if (is_array($atts) && $atts['count'] >= (int)$sec['login_max_attempts'] && ($now - $atts['last']) < (int)$sec['login_lockout']) {
-            return false; // locked out
+        $reservationExpires = self::reserveLoginAttempt();
+        if ($reservationExpires === null) {
+            return false;
         }
 
         $user = User::findByUsername($username);
         if ($user === null || !$user->verifyPassword($password)) {
-            $atts = ['count' => (is_array($atts) ? $atts['count'] : 0) + 1, 'last' => $now];
             return false;
         }
 
         $user->rehashIfNeeded($password);
-        unset($_SESSION[$key]);
+        // A slow success must not release a failure from a replacement window.
+        Database::get()->pdo()->prepare('UPDATE dn_login_throttle SET attempts = attempts - 1 WHERE ip_key = ? AND expires_at = ? AND attempts > 0')
+            ->execute([hash('sha256', self::clientIp()), $reservationExpires]);
 
         // regenerate to defeat session fixation
         session_regenerate_id(true);
@@ -83,6 +80,49 @@ final class Auth
         self::requireAuth();
         if (!Acl::canAdminister(self::user())) {
             Http::abort(403, 'Superadmins only.');
+        }
+    }
+
+    /** Reserve before verifying: parallel requests must share the same finite budget. */
+    private static function reserveLoginAttempt(): ?int
+    {
+        $db = Database::get();
+        $pdo = $db->pdo();
+        $sec = App::config()['security'];
+        $now = time();
+        $key = hash('sha256', self::clientIp());
+        $expires = $now + max(1, (int)$sec['login_lockout']);
+        // Reserve every in-flight attempt; successful authentication releases only
+        // its own reservation and cannot erase previous failed guesses.
+        $pdo->exec('CREATE TABLE IF NOT EXISTS dn_login_throttle (
+            ip_key VARCHAR(64) PRIMARY KEY,
+            attempts INTEGER NOT NULL,
+            expires_at BIGINT NOT NULL
+        )');
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare('DELETE FROM dn_login_throttle WHERE expires_at <= ?')->execute([$now]);
+            $insert = 'INSERT INTO dn_login_throttle (ip_key, attempts, expires_at) VALUES (?, 0, ?)';
+            $insert .= $db->driver() === 'mysql'
+                ? ' ON DUPLICATE KEY UPDATE ip_key = ip_key'
+                : ' ON CONFLICT (ip_key) DO NOTHING';
+            $pdo->prepare($insert)->execute([$key, $expires]);
+            // One conditional UPDATE is the admission decision, not a racy read/increment.
+            $st = $pdo->prepare('UPDATE dn_login_throttle SET attempts = attempts + 1
+                WHERE ip_key = ? AND attempts < ? AND expires_at > ?');
+            $st->execute([$key, max(1, (int)$sec['login_max_attempts']), $now]);
+            $reservationExpires = null;
+            if ($st->rowCount() === 1) {
+                // Keep the write lock until we read the actual window we reserved.
+                $st = $pdo->prepare('SELECT expires_at FROM dn_login_throttle WHERE ip_key = ?');
+                $st->execute([$key]);
+                $reservationExpires = (int)$st->fetchColumn();
+            }
+            $pdo->commit();
+            return $reservationExpires;
+        } catch (\Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
         }
     }
 

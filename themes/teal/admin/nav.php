@@ -1,35 +1,31 @@
 <?php
-/**
- * Shared admin navigation. Included by every admin screen so you can always
- * move between them (previously only the dashboard had it).
- *
- * @var string $baseUrl
- * @var string $csrf
- * @var \DN\Model\User $user
- * @var string|null $active  dashboard|post|categories|users|settings
- */
+/** Navigation is rendered once by the bundled admin shell, on every screen. */
 use DN\Acl;
 use DN\Security;
 $active = $active ?? 'dashboard';
-$tab = static function (string $key, string $href, string $label, string $current): string {
-    return '<a class="btn btn-ghost' . ($key === $current ? ' is-active' : '') . '" href="' . htmlspecialchars($href, ENT_QUOTES) . '">'
-        . htmlspecialchars($label, ENT_QUOTES) . '</a>';
-};
-$base = Security::e($baseUrl);
+$links = [
+    ['dashboard', '/admin', 'Posts', '▤'],
+    ['post', '/admin/post/new', 'New post', '+'],
+];
+if (Acl::canManageCategories($user)) {
+    $links[] = ['categories', '/admin/categories', 'Categories', '▦'];
+}
+if (Acl::canAdminister($user)) {
+    $links[] = ['users', '/admin/users', 'Users', '♙'];
+    $links[] = ['settings', '/admin/settings', 'Settings', '⚙'];
+}
 ?>
-<nav class="admin-nav">
-  <?= $tab('dashboard', $baseUrl . '/admin', 'Posts', $active) ?>
-  <?= $tab('post', $baseUrl . '/admin/post/new', '+ New post', $active) ?>
-  <?php if (Acl::canManageCategories($user)): ?>
-    <?= $tab('categories', $baseUrl . '/admin/categories', 'Categories', $active) ?>
-  <?php endif; ?>
-  <?php if (Acl::canAdminister($user)): ?>
-    <?= $tab('users', $baseUrl . '/admin/users', 'Users', $active) ?>
-    <?= $tab('settings', $baseUrl . '/admin/settings', 'Settings', $active) ?>
-  <?php endif; ?>
-  <a class="btn btn-ghost" href="<?= $base ?>/">View site</a>
-  <form method="post" action="<?= $base ?>/admin/logout" style="margin-left:auto">
-    <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
-    <button class="btn btn-ghost" type="submit">Sign out (<?= Security::e($user->username) ?> · <?= Security::e($user->role) ?>)</button>
-  </form>
+<p class="nav-heading">Workspace</p>
+<nav class="admin-nav" aria-label="Administration">
+  <?php foreach ($links as [$key, $path, $label, $icon]): ?>
+    <a href="<?= Security::e($baseUrl . $path) ?>"<?= $active === $key ? ' class="is-active" aria-current="page"' : '' ?>><span class="nav-icon" aria-hidden="true"><?= $icon ?></span><?= $label ?></a>
+  <?php endforeach; ?>
 </nav>
+<div class="sidebar-bottom">
+  <a class="sidebar-site" href="<?= Security::e($baseUrl) ?>/" target="_blank" rel="noopener">View site <span aria-hidden="true">↗</span></a>
+  <form method="post" action="<?= Security::e($baseUrl) ?>/admin/logout">
+    <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+    <button class="signout" type="submit">Sign out</button>
+  </form>
+  <p class="sidebar-note">Your words. Your website.</p>
+</div>

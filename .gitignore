@@ -9,3 +9,7 @@
 # Editor / OS files
 *.swp
 .DS_Store
+
+# Python test caches
+__pycache__/
+*.py[cod]

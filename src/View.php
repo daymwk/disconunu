@@ -14,7 +14,8 @@ final class View
     public static function render(string $template, array $data = []): void
     {
         $file    = self::resolve($template);
-        $layout  = self::resolve('layout');
+        $isAdmin = str_starts_with($template, 'admin/');
+        $layout  = self::resolve('layout', $isAdmin);
 
         extract($data, EXTR_SKIP);
         extract(self::vars());
@@ -33,7 +34,7 @@ final class View
     public static function partial(string $template, array $data = []): void
     {
         extract($data, EXTR_SKIP);
-        extract(self::vars());
+        extract(self::vars(false));
         require self::resolve($template);
     }
 
@@ -41,14 +42,14 @@ final class View
      * Variables every template (and every fragment) can rely on.
      * @return array<string,mixed>
      */
-    private static function vars(): array
+    private static function vars(bool $consumeFlashes = true): array
     {
         return [
             'appName'    => Settings::siteTitle(),
             'subtitle'   => Settings::siteTagline(),
             'baseUrl'    => App::baseUrl(),
             'csrf'       => Security::csrfToken(),
-            'flashes'    => Http::takeFlash(),
+            'flashes'    => $consumeFlashes ? Http::takeFlash() : [],
             'user'       => Auth::user(),
             'themeUrl'   => App::baseUrl() . '/themes/' . rawurlencode(Settings::theme()),
             'fallbackThemeUrl' => App::baseUrl() . '/themes/' . rawurlencode(self::FALLBACK_THEME),
@@ -64,9 +65,10 @@ final class View
      * therefore ship a single layout.php (or a handful of overrides) instead of
      * a full copy — and a partial theme never turns a page into a 500.
      */
-    private static function resolve(string $template): string
+    private static function resolve(string $template, bool $bundled = false): string
     {
-        $file = self::themeDir() . '/' . $template . '.php';
+        $bundled = $bundled || str_starts_with($template, 'admin/');
+        $file = ($bundled ? self::fallbackDir() : self::themeDir()) . '/' . $template . '.php';
         if (is_file($file)) {
             return $file;
         }
@@ -82,13 +84,17 @@ final class View
     /** Logo: admin-uploaded override (var/uploads) wins over the theme default. */
     public static function logoUrl(): ?string
     {
-        foreach (['logo.jpg', 'logo.png', 'logo.svg', 'logo.webp'] as $f) {
+        foreach (['logo.jpg', 'logo.png', 'logo.gif', 'logo.webp'] as $f) {
             if (is_file(App::rootDir() . '/var/uploads/' . $f)) {
                 return App::baseUrl() . '/uploads/' . $f;
             }
         }
         $themeLogo = self::themeDir() . '/images/logo.jpg';
-        return is_file($themeLogo) ? App::baseUrl() . '/themes/' . rawurlencode(Settings::theme()) . '/images/logo.jpg' : null;
+        if (is_file($themeLogo)) {
+            return App::baseUrl() . '/themes/' . rawurlencode(basename(self::themeDir())) . '/images/logo.jpg';
+        }
+        return is_file(self::fallbackDir() . '/images/logo.jpg')
+            ? App::baseUrl() . '/themes/' . self::FALLBACK_THEME . '/images/logo.jpg' : null;
     }
 
     /**
@@ -100,13 +106,14 @@ final class View
         if ($pages <= 1) {
             return '';
         }
+        $page = max(1, min($page, $pages));
         $window = 2;
-        $pagesVisible = [];
-        for ($i = 1; $i <= $pages; $i++) {
-            if ($i === 1 || $i === $pages || abs($i - $page) <= $window) {
-                $pagesVisible[] = $i;
-            }
-        }
+        // Generate only the window, not every page; avoid integer overflow at PHP_INT_MAX.
+        $pagesVisible = array_unique(array_merge(
+            [1, $pages],
+            range(max(1, $page - $window), $page + min($window, $pages - $page))
+        ));
+        sort($pagesVisible, SORT_NUMERIC);
         $html = '<nav class="pagination" aria-label="Pagination"><div class="pagination-inner">';
         $prev = null;
         foreach ($pagesVisible as $i) {
@@ -115,7 +122,7 @@ final class View
             }
             $url = str_replace('{page}', (string)$i, $urlPattern);
             $html .= $i === $page
-                ? '<span class="current">' . $i . '</span>'
+                ? '<span class="current" aria-current="page">' . $i . '</span>'
                 : '<a href="' . htmlspecialchars($url, ENT_QUOTES) . '">' . $i . '</a>';
             $prev = $i;
         }

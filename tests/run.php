@@ -10,7 +10,25 @@ declare(strict_types=1);
  * they are covered end-to-end by tests/smoke_http.sh rather than here.
  */
 
-require __DIR__ . '/../autoload.php';
+// Theme installation tests must never write into the working application.
+$testRoot = sys_get_temp_dir() . '/dn_app_' . getmypid();
+$copy = static function (string $from, string $to) use (&$copy): void {
+    mkdir($to, 0775, true);
+    foreach (scandir($from) as $entry) {
+        if (in_array($entry, ['.', '..', '.git', 'var'], true)) continue;
+        $src = $from . '/' . $entry;
+        if (is_link($src)) continue;
+        is_dir($src) ? $copy($src, $to . '/' . $entry) : copy($src, $to . '/' . $entry);
+    }
+};
+$copy(dirname(__DIR__), $testRoot);
+register_shutdown_function(static function () use ($testRoot): void {
+    $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($testRoot, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+    foreach ($files as $f) $f->isDir() ? rmdir($f->getPathname()) : unlink($f->getPathname());
+    rmdir($testRoot);
+    @unlink(getenv('DN_DB_DATABASE'));
+});
+require $testRoot . '/autoload.php';
 
 putenv('DN_DB_DRIVER=sqlite');
 putenv('DN_DB_DATABASE=' . sys_get_temp_dir() . '/dn_tests_' . getmypid() . '.sqlite');
@@ -124,7 +142,11 @@ echo "\n-- Users & auth --\n";
     }
 });
 
-echo "\n-- Posts, slugs, pagination --\n";
+($t)('new model users default to writer', function () {
+    assert_eq(Acl::WRITER, User::create('default_writer', 'default@test.x', 'password-writer')->role);
+});
+
+ echo "\n-- Posts, slugs, pagination --\n";
 
 ($t)('slug is ASCII, unique, suffixed on collision', function () {
     $p1 = Post::create(1, 'Ratatouille Recipe à la Provençale', '<p>x</p>', 'x', 'published');
@@ -174,6 +196,15 @@ echo "\n-- Posts, slugs, pagination --\n";
     Post::create(1, 'After repair', '<p>turmeric</p>', 'x', 'published');
     assert_true(count(Post::search('turmeric')) >= 1, 'search works again after repair');
     assert_true(Post::rebuildIndex(), 'rebuild runs on an existing index');
+});
+
+($t)('future publication is hidden from permalink and search', function () {
+    $p = Post::create(1, 'futuresecret', '<p>futuresecret</p>', 'futuresecret', 'published');
+    Database::get()->pdo()->prepare('UPDATE dn_post SET published_at = ? WHERE id = ?')->execute(['2999-01-01 00:00:00', $p->id]);
+    assert_eq(null, Post::findBySlug($p->slug));
+    assert_eq([], Post::search('futuresecret'));
+    Database::get()->pdo()->exec('DROP TABLE dn_post_fts');
+    assert_eq([], Post::search('futuresecret'), 'LIKE fallback also hides future posts');
 });
 
 ($t)('update stamps the publication date', function () {
@@ -256,6 +287,32 @@ echo "\n-- Categories --\n";
     assert_eq($g->id, $cats[0]->id, 'it is general');
 });
 
+($t)('deleting the final assigned category immediately reattaches General', function () {
+    $c = Category::create('Last category');
+    $p = Post::create(1, 'Category survivor', '<p>x</p>', '', 'draft');
+    Category::setPostCategories($p->id, [$c->id]);
+    $c->delete();
+    assert_eq([Category::bySlug('general')->id], array_map(static fn($c) => $c->id, Category::forPost($p->id)));
+});
+
+($t)('General cannot be deleted and keeps its reserved slug on rename', function () {
+    $g = Category::bySlug('general');
+    $g->update('Everything', true);
+    assert_eq('general', Category::byId($g->id)->slug);
+    $g->delete();
+    assert_true(Category::bySlug('general') !== null);
+});
+
+($t)('new posts and empty or invalid assignments immediately fall back to General', function () {
+    $p = Post::create(1, 'Immediate General', '<p>x</p>', '', 'draft');
+    $general = Category::bySlug('general')->id;
+    assert_eq([$general], array_map(static fn($c) => $c->id, Category::forPost($p->id)));
+    Category::setPostCategories($p->id, [999999, 0]);
+    assert_eq([$general], array_map(static fn($c) => $c->id, Category::forPost($p->id)));
+    Category::setPostCategories($p->id, []);
+    assert_eq([$general], array_map(static fn($c) => $c->id, Category::forPost($p->id)));
+});
+
 echo "\n-- Roles & ACL --\n";
 
 ($t)('ACL: writers reach only their own posts, admins cannot touch a superadmin post', function () {
@@ -305,6 +362,14 @@ echo "\n-- Roles & ACL --\n";
     $wr->delete();
     assert_eq(null, User::findById($id), 'account deleted');
     assert_eq($before - 1, User::countByRole(Acl::WRITER), 'role counter follows deletions');
+});
+
+($t)('writers cannot edit or delete even their own published posts', function () {
+    $wr = User::findByUsername('wr_test');
+    assert_eq(false, Acl::canEditPost($wr, $wr->id, Acl::WRITER, 'published'));
+    assert_eq(false, Acl::canDeletePost($wr, Acl::WRITER, $wr->id, 'published'));
+    assert_true(Acl::canEditPost($wr, $wr->id, Acl::WRITER, 'draft'));
+    assert_true(Acl::canDeletePost($wr, Acl::WRITER, $wr->id, 'draft'));
 });
 
 echo "\n-- Settings --\n";
@@ -357,6 +422,16 @@ echo "\n-- Themes --\n";
     $z->addFromString('../../evil.php', '<?php system($_GET["c"]);'); // zip-slip attempt
     $z->close();
 
+    $rejected = false;
+    try {
+        ThemeManager::installFromZip($zipPath);
+    } catch (\RuntimeException $error) {
+        $rejected = true;
+    }
+    assert_true($rejected, 'unsafe archive rejected in full');
+    $z->open($zipPath);
+    $z->deleteName('../../evil.php');
+    $z->close();
     $name = ThemeManager::installFromZip($zipPath);
     assert_true(ThemeManager::exists($name), "theme {$name} installed");
     assert_true(!file_exists($root . '/../evil.php') && !file_exists($root . '/evil.php'), 'zip-slip blocked');
@@ -368,6 +443,43 @@ echo "\n-- Themes --\n";
 
 ($t)('the bundled teal theme is installable/visible', function () {
     assert_true(ThemeManager::exists('teal'), 'teal listed');
+});
+
+($t)('admin post pages filter before slicing beyond 500 posts', function () {
+    $wr = User::findByUsername('wr_test');
+    $cat = Category::create('Paging category');
+    for ($i = 0; $i < 505; $i++) {
+        $p = Post::create($wr->id, sprintf('Needle %03d', $i), '<p>body</p>', '', 'draft');
+        Category::setPostCategories($p->id, [$cat->id]);
+    }
+    Post::create(1, 'Needle foreign', '<p>body</p>', '', 'draft');
+    $r = Post::adminPage(['q'=>'Needle', 'status'=>'draft', 'category'=>$cat->id, 'sort'=>'oldest', 'page'=>101, 'per_page'=>5], $wr->id);
+    assert_eq(505, $r['total']);
+    assert_eq(101, $r['pages']);
+    assert_eq(101, $r['page']);
+    assert_eq(5, count($r['posts']));
+    assert_eq('Needle 500', $r['posts'][0]->title);
+    assert_true(str_contains($r['paginationUrl'], 'q=Needle'));
+    assert_true(str_contains($r['paginationUrl'], 'page={page}'));
+    assert_eq(0, Post::adminPage(['q'=>"' OR 1=1 --"])['total']);
+    assert_eq(0, Post::adminPage(['author'=>1], $wr->id)['total']);
+    assert_eq(100, Post::adminPage(['per_page'=>900, 'page'=>-3])['perPage']);
+});
+
+($t)('category pages combine query and visibility and clamp pages', function () {
+    for ($i = 0; $i < 23; $i++) Category::create('Paged category ' . $i, null, false);
+    $r = Category::adminPage(['q'=>'Paged category', 'visibility'=>'hidden', 'per_page'=>5, 'page'=>999]);
+    assert_eq(23, $r['total']); assert_eq(5, $r['page']); assert_eq(3, count($r['cats']));
+    assert_eq(0, Category::adminPage(['q'=>'Paged category', 'visibility'=>'visible'])['total']);
+    assert_eq(0, Category::adminPage(['q'=>'%'])['total'], 'wildcards are literal');
+});
+
+($t)('user pages filter role and email search with real offsets', function () {
+    $r = User::adminPage(['q'=>'@', 'role'=>'superadmin', 'per_page'=>1, 'page'=>2]);
+    assert_eq(User::countByRole('superadmin'), $r['total']);
+    assert_eq(1, count($r['users'])); assert_eq(2, $r['page']);
+    assert_eq('superadmin', $r['users'][0]->role);
+    assert_eq(0, User::adminPage(['q'=>"%' OR 1=1 --"])['total']);
 });
 
 echo "\n-- Router --\n";

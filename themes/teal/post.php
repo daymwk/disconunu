@@ -5,7 +5,7 @@
  */
 use DN\Model\Category;
 use DN\Security;
-$cats = Category::forPost($post->id);
+$postCats = array_filter(Category::forPost($post->id), static fn(Category $category): bool => $category->visible);
 ?>
 <article class="post">
   <h1><?= Security::e($post->title) ?></h1>
@@ -14,7 +14,7 @@ $cats = Category::forPost($post->id);
     <?php if ($post->publishedAt): ?>
       <time datetime="<?= Security::e($post->publishedAt) ?>Z"><?= Security::e(date('d M Y', strtotime($post->publishedAt))) ?></time>
     <?php endif; ?>
-    <?php foreach ($cats as $c): ?>
+    <?php foreach ($postCats as $c): ?>
       <a class="badge badge-cat" href="<?= Security::e($baseUrl) ?>/category/<?= rawurlencode($c->slug) ?>"><?= Security::e($c->title) ?></a>
     <?php endforeach; ?>
   </p>

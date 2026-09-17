@@ -66,6 +66,21 @@ final class User
         return array_map(static fn(array $r): self => new self($r), $rows);
     }
 
+    public static function adminPage(array $input = []): array
+    {
+        $q = \DN\Pagination::text($input, 'q');
+        $role = \DN\Pagination::text($input, 'role');
+        if (!\DN\Acl::isValidRole($role)) $role = '';
+        $where = ['1=1']; $bind = [];
+        if ($q !== '') {
+            $where[] = "(username LIKE ? ESCAPE '!' OR email LIKE ? ESCAPE '!')";
+            $bind = array_fill(0, 2, \DN\Pagination::like($q));
+        }
+        if ($role !== '') { $where[] = 'role = ?'; $bind[] = $role; }
+        return \DN\Pagination::query('SELECT *', 'FROM dn_user WHERE ' . implode(' AND ', $where),
+            'id', $bind, $input, compact('q', 'role'), '/admin/users', 'users', static fn(array $r): self => new self($r));
+    }
+
     /** @return int number of accounts holding a given role */
     public static function countByRole(string $role): int
     {
@@ -115,7 +130,27 @@ final class User
         }
     }
 
-    public static function create(string $username, string $email, string $plain, string $role = 'author'): self
+    /** Serialize initial setup so concurrent requests cannot claim another superadmin. */
+    public static function createFirst(string $username, string $email, string $plain): self
+    {
+        $pdo = Database::get()->pdo();
+        $pdo->beginTransaction();
+        try {
+            // The migration row exists before setup and provides a portable write lock.
+            $pdo->exec('UPDATE dn_migrations SET applied_at = applied_at WHERE version = 1');
+            if (self::countAll() !== 0) {
+                throw new \RuntimeException('Initial setup has already been completed.');
+            }
+            $user = self::create($username, $email, $plain, \DN\Acl::SUPERADMIN);
+            $pdo->commit();
+            return $user;
+        } catch (\Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
+        }
+    }
+
+    public static function create(string $username, string $email, string $plain, string $role = 'writer'): self
     {
         $pdo = Database::get()->pdo();
         $st  = $pdo->prepare('INSERT INTO dn_user (username, email, password_hash, role, created_at) VALUES (?,?,?,?,?)');

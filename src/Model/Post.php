@@ -40,9 +40,9 @@ final class Post
     public static function findBySlug(string $slug, bool $publishedOnly = true): ?self
     {
         $sql  = self::SELECT_JOINED . ' WHERE p.slug = ?';
-        $sql .= $publishedOnly ? " AND p.status = 'published'" : '';
+        $sql .= $publishedOnly ? " AND p.status = 'published' AND p.published_at <= ?" : '';
         $st = Database::get()->pdo()->prepare($sql);
-        $st->execute([$slug]);
+        $st->execute($publishedOnly ? [$slug, Database::now()] : [$slug]);
         $row = $st->fetch();
         return $row === false ? null : new self($row);
     }
@@ -95,6 +95,34 @@ final class Post
         return array_map(static fn(array $r): self => new self($r), $st->fetchAll());
     }
 
+    /** Filter first, then page in SQL. The actor restriction cannot be overridden by filters. */
+    public static function adminPage(array $input = [], ?int $onlyAuthor = null): array
+    {
+        $q = \DN\Pagination::text($input, 'q');
+        $status = \DN\Pagination::text($input, 'status');
+        $status = in_array($status, ['draft', 'published'], true) ? $status : '';
+        $category = max(0, (int)\DN\Pagination::text($input, 'category'));
+        $author = max(0, (int)\DN\Pagination::text($input, 'author'));
+        $sort = \DN\Pagination::text($input, 'sort', 'newest');
+        $orders = ['newest'=>'p.id DESC', 'oldest'=>'p.id ASC', 'title'=>'p.title ASC, p.id ASC', 'updated'=>'p.updated_at DESC, p.id DESC'];
+        if (!isset($orders[$sort])) $sort = 'newest';
+        $where = ['1=1']; $bind = [];
+        if ($onlyAuthor !== null) { $where[] = 'p.user_id = ?'; $bind[] = $onlyAuthor; }
+        if ($author > 0) { $where[] = 'p.user_id = ?'; $bind[] = $author; }
+        if ($status !== '') { $where[] = 'p.status = ?'; $bind[] = $status; }
+        if ($category > 0) {
+            $where[] = 'EXISTS (SELECT 1 FROM dn_post_category pc WHERE pc.post_id = p.id AND pc.category_id = ?)';
+            $bind[] = $category;
+        }
+        if ($q !== '') {
+            $where[] = "(p.title LIKE ? ESCAPE '!' OR p.content LIKE ? ESCAPE '!' OR p.excerpt LIKE ? ESCAPE '!')";
+            array_push($bind, ...array_fill(0, 3, \DN\Pagination::like($q)));
+        }
+        return \DN\Pagination::query('SELECT p.*, u.username, u.role',
+            'FROM dn_post p JOIN dn_user u ON u.id = p.user_id WHERE ' . implode(' AND ', $where),
+            $orders[$sort], $bind, $input, compact('q', 'status', 'category', 'author', 'sort'), '/admin', 'posts', static fn(array $r): self => new self($r));
+    }
+
     /** Published-post count within a category. */
     public static function countPublishedIn(int $categoryId): int
     {
@@ -142,12 +170,13 @@ final class Post
             ));
             $sql = self::SELECT_JOINED
                 . " JOIN dn_post_fts f ON f.rowid = p.id"
-                . " WHERE dn_post_fts MATCH ? AND p.status = 'published'"
+                . " WHERE dn_post_fts MATCH ? AND p.status = 'published' AND p.published_at <= ?"
                 . ' ORDER BY rank LIMIT ?';
             try {
                 $st = $db->pdo()->prepare($sql);
                 $st->bindValue(1, $match);
-                $st->bindValue(2, $limit, \PDO::PARAM_INT);
+                $st->bindValue(2, Database::now());
+                $st->bindValue(3, $limit, \PDO::PARAM_INT);
                 $st->execute();
                 return array_map(static fn(array $r): self => new self($r), $st->fetchAll());
             } catch (\Throwable $e) {
@@ -161,9 +190,14 @@ final class Post
         // fallback portable (mysql/pgsql, ou sqlite sans FTS5)
         $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q) . '%';
         $st = $db->pdo()->prepare(
-            self::SELECT_JOINED . " WHERE p.status = 'published' AND (p.title LIKE ? OR p.excerpt LIKE ? OR p.content LIKE ?)"
+            self::SELECT_JOINED . " WHERE p.status = 'published' AND p.published_at <= ? AND (p.title LIKE ? OR p.excerpt LIKE ? OR p.content LIKE ?)"
             . ' ORDER BY p.published_at DESC LIMIT ?');
-        $st->execute([$like, $like, $like, $limit]);
+        $st->bindValue(1, Database::now());
+        $st->bindValue(2, $like);
+        $st->bindValue(3, $like);
+        $st->bindValue(4, $like);
+        $st->bindValue(5, $limit, \PDO::PARAM_INT);
+        $st->execute();
         return array_map(static fn(array $r): self => new self($r), $st->fetchAll());
     }
 
@@ -214,6 +248,7 @@ final class Post
         $st->execute([$userId, $title, $slug, $excerpt, $content, $status, $pub, $now]);
         $p = self::findById((int)$pdo->lastInsertId());
         assert($p !== null);
+        Category::setPostCategories($p->id, []);
         return $p;
     }
 

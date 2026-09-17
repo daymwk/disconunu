@@ -37,6 +37,12 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
+.skip-link { position: absolute; left: 1rem; top: -100px; z-index: 20; background: var(--card); color: var(--ink); padding: .6rem 1rem; border: 2px solid var(--teal-deep); border-radius: 6px; }
+.skip-link:focus { top: 1rem; }
+.wrap, .brand-text, .site-footer span { min-width: 0; overflow-wrap: anywhere; }
+.site-footer .wrap { width: 100%; }
+.pagination-inner { max-width: 100%; }
+
 
 body {
   margin: 0;
@@ -108,7 +114,7 @@ main.wrap { flex: 1 0 auto; }
   outline: 1px solid rgba(255,255,255,.45);
 }
 
-/* ---------- corps ---------- */
+/* ---------- content ---------- */
 main.wrap { padding-block: 2.2rem 3rem; min-height: 60vh; }
 
 .post-list { display: grid; gap: 1.6rem; }
@@ -204,7 +210,7 @@ main.wrap { padding-block: 2.2rem 3rem; min-height: 60vh; }
 .flash-error { background: color-mix(in srgb, var(--danger) 10%, var(--card)); border-color: var(--danger); }
 .flash-info  { background: var(--accent-bg); border-color: var(--teal-deep); }
 
-/* ---------- formulaires ---------- */
+/* ---------- forms ---------- */
 form.auth-form, form.post-form {
   max-width: 640px;
   background: var(--card);
@@ -303,7 +309,7 @@ input:focus, textarea:focus, select:focus {
 form small { color: var(--ink-soft); font-weight: 400; }
 .site-footer a { color: var(--teal-deep); }
 
-/* ---------- erreurs ---------- */
+/* ---------- errors ---------- */
 .error-page { text-align: center; padding: 4rem 1rem; }
 .error-page .code { font-size: 5rem; font-weight: 700; color: var(--teal); line-height: 1; }
 

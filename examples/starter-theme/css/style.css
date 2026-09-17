@@ -1,0 +1,13 @@
+/* A small editorial variation. Override these tokens to make it your own. */
+:root {
+  --teal: #e8b36a;
+  --teal-deep: #9b632b;
+  --teal-ink: #392d23;
+  --accent-bg: #fcf3e7;
+}
+.starter-theme .site-header { background: #392d23; border-color: var(--teal); }
+.starter-theme .post-card { border-top-color: var(--teal); box-shadow: none; }
+.starter-theme .brand-text strong { letter-spacing: .03em; }
+@media (prefers-color-scheme: dark) {
+  :root { --teal-deep: #e8b36a; --accent-bg: #302820; }
+}

@@ -35,8 +35,8 @@ return [
         'session_name'        => 'dn_session',
         'secure_cookies'      => env('DN_SECURE_COOKIES', '0') === '1', // set to 1 behind HTTPS
         'login_max_attempts'  => 5,
-        'login_lockout'       => 900,   // secondes
-        'content_allow_html'  => true,  // les posts des auteurs passent par l'allowlist de sanitizeHtml()
+        'login_lockout'       => 900,   // seconds
+        'content_allow_html'  => true,  // post HTML passes through the sanitizer allowlist
     ],
 
     'blog' => [

@@ -34,8 +34,15 @@ DB=""
 if [ -z "${BASE:-}" ]; then
   MODE="auto"
   TMPD=$(mktemp -d)
+  # Uploads and installed themes must never touch an operator's working site.
+  python3 - "$ROOT" "$TMPD/app" <<'PY'
+import shutil, sys
+shutil.copytree(sys.argv[1], sys.argv[2], ignore=shutil.ignore_patterns('.git', 'var', '__pycache__'))
+PY
+  ROOT="$TMPD/app"
+  cd "$ROOT" || exit 1
   DB="$TMPD/smoke.sqlite"
-  PORT=8391
+  PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
   BASE="http://127.0.0.1:$PORT"
   UPLOADED_LOGO=""
 
@@ -139,7 +146,7 @@ if [ "$MODE" = "auto" ]; then
   [ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/feed")" = "200" ] && ok "RSS enabled -> 200" || ko "RSS not serving"
   CSRF=$(csrf "$CJ" /admin/settings)
   curl -s -b "$CJ" -o /dev/null -X POST "$BASE/admin/settings" --data-urlencode "csrf=$CSRF" \
-    -d 'site_title=Smoke blog' -d 'posts_per_page=1' -d 'theme=teal'   # rss_enabled omitted = off
+    -d 'site_title=Smoke blog' -d 'posts_per_page=1' -d 'theme=teal' -d 'rss_enabled=0'
   check "RSS disabled -> 404" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/feed")" "404"
   CSRF=$(csrf "$CJ" /admin/settings)
   curl -s -b "$CJ" -o /dev/null -X POST "$BASE/admin/settings" --data-urlencode "csrf=$CSRF" \
@@ -161,7 +168,7 @@ if [ "$MODE" = "auto" ]; then
     $z->addFromString("smoketheme/layout.php", "<!DOCTYPE html><html><body><?= \$content ?><footer>SMOKETHEME</footer></body></html>");
     $z->close();' "$TMPD/theme.zip"
   CSRF=$(csrf "$CJ" /admin/settings)
-  code=$(curl -s -b "$CJ" -o /dev/null -w '%{http_code}' -X POST "$BASE/admin/theme" -F "csrf=$CSRF" -F "themezip=@$TMPD/theme.zip")
+  code=$(curl -s -b "$CJ" -o /dev/null -w '%{http_code}' -X POST "$BASE/admin/theme" -F "csrf=$CSRF" -F "themezip=@$TMPD/theme.zip" -F 'activate=1')
   check "theme zip install -> 303" "$code" "303"
   INSTALLED_THEME=$(active_theme "$CJ")
   if curl -s "$BASE/" | grep -q 'SMOKETHEME'; then
@@ -197,7 +204,8 @@ if [ "$MODE" = "auto" ]; then
   curl -s "$BASE/" | grep -q 'Smoke footer 42' && ok "footer text applied" || ko "footer text not applied"
 
   # dashboard status filter
-  curl -s -b "$CJ" "$BASE/admin?status=draft" | grep -q 'Filtered:' && ok "dashboard filters by status" || ko "dashboard filter broken"
+  draft_page=$(curl -s -b "$CJ" "$BASE/admin?status=draft")
+  echo "$draft_page" | grep -q '<option value="draft" selected>' && ! echo "$draft_page" | grep -q 'class="badge badge-published"' && ok "dashboard filters by status" || ko "dashboard filter broken"
 
   # user management: create then delete
   CSRF=$(csrf "$CJ" /admin/users)
