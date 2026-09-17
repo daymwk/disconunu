@@ -202,9 +202,16 @@ $router->get('/admin', function (): void {
     Auth::requireAuth();
     $u = Auth::user();
     $posts = Acl::canPublish($u)
-        ? Post::all(100)
-        : Post::allByAuthor((int)$u->id, 100);
-    View::render('admin/dashboard', ['posts' => $posts, 'title' => 'Admin']);
+        ? Post::all(500)
+        : Post::allByAuthor((int)$u->id, 500);
+
+    // Optional ?status=draft|published filter, handy once the list grows.
+    $status = in_array($_GET['status'] ?? '', ['draft', 'published'], true) ? (string)$_GET['status'] : '';
+    if ($status !== '') {
+        $posts = array_values(array_filter($posts, static fn(Post $x): bool => $x->status === $status));
+    }
+
+    View::render('admin/dashboard', ['posts' => $posts, 'status' => $status, 'title' => 'Admin']);
 });
 
 // ---------- Admin: posts ----------
@@ -439,10 +446,80 @@ $router->post('/admin/theme', function (): void {
     Http::redirect('/admin/settings');
 });
 
+// ---------- Admin: theme uninstall (superadmin) ----------
+$router->post('/admin/theme/{name}/delete', function (array $args): void {
+    Auth::requireSuperAdmin();
+    if (!Security::checkCsrf($_POST['csrf'] ?? null)) {
+        Http::abort(400, 'Invalid CSRF token.');
+    }
+    $name = (string)$args['name'];
+    if ($name === View::FALLBACK_THEME) {
+        Http::flash('error', 'The bundled theme cannot be removed: it is the fallback for every install.');
+    } elseif ($name === Settings::theme()) {
+        Http::flash('error', 'This theme is active — switch to another one first.');
+    } elseif (!ThemeManager::exists($name)) {
+        Http::flash('error', 'Unknown theme.');
+    } elseif (ThemeManager::removeTheme($name)) {
+        Http::flash('ok', "Theme “{$name}” deleted.");
+    } else {
+        Http::flash('error', "Could not delete theme “{$name}”.");
+    }
+    Http::redirect('/admin/settings');
+});
+
 // ---------- Admin: users (superadmin) ----------
 $router->get('/admin/users', function (): void {
     Auth::requireSuperAdmin();
-    View::render('admin/users', ['users' => User::all(), 'title' => 'Users']);
+    View::render('admin/users', [
+        'users'            => User::all(),
+        'superadminCount'  => User::countByRole(Acl::SUPERADMIN),
+        'title'            => 'Users',
+    ]);
+});
+
+$router->post('/admin/users/create', function (): void {
+    Auth::requireSuperAdmin();
+    if (!Security::checkCsrf($_POST['csrf'] ?? null)) {
+        Http::abort(400, 'Invalid CSRF token.');
+    }
+    $username = trim((string)($_POST['username'] ?? ''));
+    $email    = trim((string)($_POST['email'] ?? ''));
+    $password = (string)($_POST['password'] ?? '');
+    $role     = (string)($_POST['role'] ?? Acl::WRITER);
+
+    if (!preg_match('/^[A-Za-z0-9_.-]{3,64}$/', $username)) {
+        Http::flash('error', 'Username must be 3-64 characters: letters, digits, dot, underscore or dash.');
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        Http::flash('error', 'Invalid email address.');
+    } elseif (strlen($password) < 10) {
+        Http::flash('error', 'Password must be at least 10 characters.');
+    } elseif (!Acl::isValidRole($role)) {
+        Http::flash('error', 'Invalid role.');
+    } elseif (User::findByUsername($username) !== null || User::emailExists($email)) {
+        Http::flash('error', 'That username or email is already taken.');
+    } else {
+        $created = User::create($username, $email, $password, $role);
+        Http::flash('ok', "User {$created->username} created ({$role}).");
+    }
+    Http::redirect('/admin/users');
+});
+
+$router->post('/admin/users/{id}/delete', function (array $args): void {
+    Auth::requireSuperAdmin();
+    if (!Security::checkCsrf($_POST['csrf'] ?? null)) {
+        Http::abort(400, 'Invalid CSRF token.');
+    }
+    $me     = Auth::user();
+    $target = User::findById((int)$args['id']);
+    if ($target === null) {
+        Http::abort(404);
+    }
+    if (!Acl::canDeleteUser($me, $target, User::countByRole(Acl::SUPERADMIN))) {
+        Http::abort(403, 'You cannot delete this account (yourself, or the last superadmin).');
+    }
+    $target->delete();
+    Http::flash('ok', 'Account deleted.');
+    Http::redirect('/admin/users');
 });
 
 $router->post('/admin/users/{id}/role', function (array $args): void {

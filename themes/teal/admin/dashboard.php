@@ -11,21 +11,12 @@ use DN\View;
 ?>
 <h1>Admin</h1>
 
-<nav class="admin-nav">
-  <a class="btn" href="<?= Security::e($baseUrl) ?>/admin/post/new">+ New post</a>
-  <?php if (Acl::canManageCategories($user)): ?>
-    <a class="btn btn-ghost" href="<?= Security::e($baseUrl) ?>/admin/categories">Categories</a>
-  <?php endif; ?>
-  <?php if (Acl::canAdminister($user)): ?>
-    <a class="btn btn-ghost" href="<?= Security::e($baseUrl) ?>/admin/users">Users</a>
-    <a class="btn btn-ghost" href="<?= Security::e($baseUrl) ?>/admin/settings">Settings</a>
-  <?php endif; ?>
-  <a class="btn btn-ghost" href="<?= Security::e($baseUrl) ?>/">View site</a>
-  <form method="post" action="<?= Security::e($baseUrl) ?>/admin/logout" style="margin-left:auto">
-    <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
-    <button class="btn btn-ghost" type="submit">Sign out (<?= Security::e($user->username) ?> · <?= Security::e($user->role) ?>)</button>
-  </form>
-</nav>
+<?php View::partial('admin/nav', ['active' => 'dashboard']); ?>
+
+<?php if ($status !== ''): ?>
+  <p class="post-meta">Filtered: <span class="badge badge-<?= Security::e($status) ?>"><?= Security::e($status) ?></span>
+    — <a href="<?= Security::e($baseUrl) ?>/admin">show all</a></p>
+<?php endif; ?>
 
 <table class="admin-table">
   <thead><tr><th>Title</th><th>Status</th><th>Author</th><th>Published</th><th></th><th></th></tr></thead>

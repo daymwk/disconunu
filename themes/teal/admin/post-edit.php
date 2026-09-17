@@ -9,11 +9,14 @@
  */
 use DN\Acl;
 use DN\Security;
+use DN\View;
 $isEdit = $post !== null;
 $canPublish = Acl::canPublish($user);
 $myCats = $myCats ?? [];
 ?>
 <h1><?= $isEdit ? 'Edit post' : 'New post' ?></h1>
+
+<?php View::partial('admin/nav', ['active' => 'post']); ?>
 
 <form class="post-form" method="post" action="<?= Security::e($baseUrl) ?>/admin/post/save">
   <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">

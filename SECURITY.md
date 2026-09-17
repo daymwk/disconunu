@@ -20,7 +20,8 @@ abuse** — not hostile co-authors.
 | Path traversal | docroot is `public/` only; theme-asset route restricted to an extension allowlist and confined by `realpath` under `themes/` | smoke (traversals → 404) |
 | Theme zip upload | superadmin only, entry names with `..`/absolute paths skipped, per-file size cap, requires `layout.php` | unit (zip-slip attempt) |
 | Logo upload | superadmin only, MIME sniffed with `finfo`, extension allowlist, 512 KB cap, stored in `var/uploads` (outside the docroot) | smoke (upload + serve) |
-| Authorization | `Acl` — writers reach only their own drafts, admins cannot touch a superadmin's post, only superadmins manage settings/themes/users, no self-demotion of the last superadmin | unit + smoke (403 paths) |
+| Authorization | `Acl` — writers reach only their own drafts, admins cannot touch a superadmin's post, only superadmins manage settings/themes/users, no self-demotion or self-deletion, the last superadmin is protected | unit + smoke (403 paths) |
+| Account management | creation and deletion are superadmin-only; deleting is refused for your own account and for the last superadmin, so a site can never be left without an administrator | unit + smoke |
 | Headers | CSP `default-src 'self'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `X-Powered-By` removed | smoke |
 | Error disclosure | generic 500 body, details only in `error_log` (unless `DN_DEBUG=1`) | code |
 | URL handling | ASCII slugs (transliteration + regex allowlist) — no injection through `?idArticle=` | unit |
@@ -52,5 +53,5 @@ abuse** — not hostile co-authors.
 
 ## Reporting a bug
 
-Open an issue. The suites that guard these surfaces are `tests/run.php` (26 tests)
-and `tests/smoke_http.sh` (48 checks) — please include a failing case if you can.
+Open an issue. The suites that guard these surfaces are `tests/run.php` (27 tests)
+and `tests/smoke_http.sh` (64 checks) — please include a failing case if you can.

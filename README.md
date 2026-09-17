@@ -27,8 +27,9 @@ modern engine, hardened for a real deployment.
   | `admin` | write + publish + edit/delete posts, manage categories |
   | `writer` | write drafts; edit/delete **their own** posts; cannot publish |
 
-- An `admin` cannot delete a `superadmin`'s post; nobody can demote the last superadmin.
-  The first account created on a fresh install becomes `superadmin`.
+- Accounts are created and deleted from **Admin → Users** (superadmin): an admin can never
+  reach that screen, nobody can delete their own account, and the last superadmin is
+  protected. The same operations exist in the CLI for scripted installs.
 
 **Site**
 - Admin-editable identity: site title, tagline, footer text, logo upload, posts per page, theme
@@ -59,6 +60,9 @@ php bin/seed-demo.php 200          # optional: 200 sample posts
 php -S 127.0.0.1:8090 -t public public/router.php
 # → http://127.0.0.1:8090/  (sign in at /admin/login)
 ```
+
+> Editing templates while that server runs? Add `-d opcache.enable_cli=0`, otherwise the
+> built-in server keeps serving compiled templates and your edits look ignored.
 
 Requirements: PHP 8.2+ with `pdo_sqlite` (or `pdo_mysql` / `pdo_pgsql`) and `zip`
 for theme uploads. Nothing else.
@@ -161,9 +165,14 @@ css/style.css  images/logo.jpg
 
 `layout.php` receives `$content` plus `$appName`, `$subtitle`, `$baseUrl`, `$csrf`,
 `$flashes`, `$user`, `$themeUrl`, `$fallbackThemeUrl`, `$logoUrl`, `$rssEnabled`
-and `$cats` (visible categories). Upload a `.zip` of the theme folder from
-**Admin → Settings → Theme packs**: entries outside the theme root are ignored,
-archives without `layout.php` are refused, and oversized files are skipped.
+and `$cats` (visible categories). Fragments can be pulled in with
+`View::partial('admin/nav')`.
+
+Install a theme by uploading a `.zip` of the theme folder from **Admin → Settings**
+(entries outside the theme root are ignored, archives without `layout.php` are refused,
+oversized files are skipped); it becomes active immediately and can be switched or
+deleted from the same screen. The bundled `teal` theme and the theme currently in use
+cannot be deleted — `teal` is the per-template fallback behind every install.
 
 ## Maintenance
 
@@ -182,14 +191,15 @@ attaches any uncategorized post to it, normalizes the role vocabulary and drops 
 ## Tests
 
 ```bash
-php tests/run.php          # 26 unit/behaviour tests (no dependency)
-bash tests/smoke_http.sh   # 48 end-to-end HTTP checks on a throwaway database
+php tests/run.php          # 27 unit/behaviour tests (no dependency)
+bash tests/smoke_http.sh   # 64 end-to-end HTTP checks on a throwaway database
 ```
 
 The smoke suite boots its own PHP server and its own SQLite database, exercises the
-public site and the whole admin (login, ACL, posts, categories, settings, RSS toggle,
-logo upload, theme install, pagination) and cleans up after itself. Both suites are
-green on PHP 8.5.
+public site and the whole admin (login, ACL and 403 paths, posts, categories, settings,
+RSS toggle, footer text, logo upload, theme install *and* uninstall, user creation and
+deletion, windowed pagination, shared admin navigation) and cleans up after itself.
+Both suites are green on PHP 8.5.
 
 ## License
 

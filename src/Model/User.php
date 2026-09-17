@@ -66,6 +66,23 @@ final class User
         return array_map(static fn(array $r): self => new self($r), $rows);
     }
 
+    /** @return int number of accounts holding a given role */
+    public static function countByRole(string $role): int
+    {
+        $st = Database::get()->pdo()->prepare('SELECT COUNT(*) FROM dn_user WHERE role = ?');
+        $st->execute([$role]);
+        return (int)$st->fetchColumn();
+    }
+
+    /**
+     * Delete the account. Callers must go through Acl::canDeleteUser first —
+     * the model deliberately does not know who is asking.
+     */
+    public function delete(): void
+    {
+        Database::get()->pdo()->prepare('DELETE FROM dn_user WHERE id = ?')->execute([$this->id]);
+    }
+
     public function setRole(string $role): void
     {
         if (!\DN\Acl::isValidRole($role)) {

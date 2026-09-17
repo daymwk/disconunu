@@ -17,8 +17,33 @@ final class View
         $layout  = self::resolve('layout');
 
         extract($data, EXTR_SKIP);
-        /** @var array<string,mixed> $__ */
-        $__ = [
+        extract(self::vars());
+
+        // the template produces $content, the layout wraps it
+        ob_start();
+        require $file;
+        $content = (string)ob_get_clean();
+        require $layout;
+    }
+
+    /**
+     * Render a fragment inside the current template (e.g. the shared admin nav).
+     * @param array<string,mixed> $data
+     */
+    public static function partial(string $template, array $data = []): void
+    {
+        extract($data, EXTR_SKIP);
+        extract(self::vars());
+        require self::resolve($template);
+    }
+
+    /**
+     * Variables every template (and every fragment) can rely on.
+     * @return array<string,mixed>
+     */
+    private static function vars(): array
+    {
+        return [
             'appName'    => Settings::siteTitle(),
             'subtitle'   => Settings::siteTagline(),
             'baseUrl'    => App::baseUrl(),
@@ -29,14 +54,8 @@ final class View
             'fallbackThemeUrl' => App::baseUrl() . '/themes/' . rawurlencode(self::FALLBACK_THEME),
             'logoUrl'    => self::logoUrl(),
             'rssEnabled' => Settings::rssEnabled(),
+            'themes'     => ThemeManager::available(),
         ];
-        extract($__);
-
-        // the template produces $content, the layout wraps it
-        ob_start();
-        require $file;
-        $content = (string)ob_get_clean();
-        require $layout;
     }
 
     /**
@@ -73,7 +92,8 @@ final class View
     }
 
     /**
-     * Windowed pagination markup: « 1 … 4 [5] 6 … 20 » — never overflows on many pages.
+     * Windowed pagination markup (1 ... 4 [5] 6 ... 20) — never overflows on many pages,
+     * however many pages a listing has.
      */
     public static function pagination(int $page, int $pages, string $urlPattern): string
     {

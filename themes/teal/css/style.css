@@ -1,8 +1,7 @@
 /* ============================================================
-   Disco nunu — thème "teal"
-   Héritier de la DA 2017 : le vert-bleu #29d9c2 / #00a2a5 est resté,
-   tout le reste est reconstruit en CSS moderne (variables, dark mode,
-   fluide, zéro framework).
+   Disco nunu — "teal" theme
+   Heir to the 2017 look: the green-blue #29d9c2 / #00a2a5 stayed, everything
+   else is rebuilt in modern CSS (variables, dark mode, fluid, no framework).
    ============================================================ */
 
 :root {
@@ -59,7 +58,7 @@ main.wrap { flex: 1 0 auto; }
   padding-inline: clamp(1rem, 4vw, 2.5rem);
 }
 
-/* ---------- header : le bandeau teal de 2017, épuré ---------- */
+/* ---------- header: the 2017 teal banner, cleaned up ---------- */
 .site-header {
   background: linear-gradient(120deg, var(--teal) 0%, var(--teal-deep) 100%);
   color: #fff;

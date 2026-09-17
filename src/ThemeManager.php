@@ -63,8 +63,13 @@ final class ThemeManager
             throw new \RuntimeException('No layout.php found: not a Disco nunu theme.');
         }
 
-        $name = basename((string)dirname($prefix !== '' ? rtrim($prefix, '/') : 'theme'));
-        if ($name === '.' || $name === '/' || $name === 'theme') {
+        // Name = the zip's single top-level folder, else the archive file name.
+        if ($prefix !== '') {
+            $name = basename(rtrim($prefix, '/'));
+        } else {
+            $name = pathinfo(basename($tmpZipPath), PATHINFO_FILENAME); // e.g. "mytheme.zip" -> "mytheme"
+        }
+        if ($name === '' || $name === '.' || $name === '/') {
             $name = 'theme-' . substr(hash('sha256', (string)file_get_contents($tmpZipPath)), 0, 8);
         }
         // sanitize + collision

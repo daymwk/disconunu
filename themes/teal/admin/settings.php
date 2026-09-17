@@ -1,14 +1,18 @@
 <?php
-/** Site settings (superadmin): identity, footer, RSS, posts/page, theme, logo.
+/** Site settings (superadmin): identity, footer, RSS, posts/page, logo, themes.
  * @var list<string> $themes
  * @var string $current
  * @var string $baseUrl
  * @var string $csrf
+ * @var string $themeUrl
  */
 use DN\Model\Settings;
 use DN\Security;
+use DN\View;
 ?>
 <h1>Settings</h1>
+
+<?php View::partial('admin/nav', ['active' => 'settings']); ?>
 
 <form class="post-form" method="post" action="<?= Security::e($baseUrl) ?>/admin/settings">
   <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
@@ -45,7 +49,8 @@ use DN\Security;
 </form>
 
 <h2>Logo</h2>
-<p class="post-excerpt">PNG / JPEG / GIF / WebP / SVG, max 512 Ko. Leave empty to use the theme’s own logo.</p>
+<p class="post-excerpt">PNG / JPEG / GIF / WebP / SVG, max 512 KB. Leave it alone to keep the current logo
+  (the bundled theme ships the original one).</p>
 <form class="post-form" method="post" action="<?= Security::e($baseUrl) ?>/admin/logo" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
   <label>Upload logo
@@ -54,19 +59,47 @@ use DN\Security;
   <div class="admin-actions">
     <button class="btn" type="submit">Upload</button>
     <button class="btn btn-danger" type="submit" name="remove" value="1"
-            onclick="return confirm('Remove custom logo?')">Remove custom logo</button>
+            onclick="return confirm('Remove the custom logo and fall back to the theme logo?')">Remove custom logo</button>
   </div>
 </form>
 
-<h2>Theme packs</h2>
-<p class="post-excerpt">A theme is a folder under <code>themes/</code> containing <code>layout.php</code>. Drop one there manually, or install a <code>.zip</code> theme pack (superadmin):</p>
+<h2>Themes</h2>
+<p class="post-excerpt">A theme is a folder under <code>themes/</code> containing <code>layout.php</code>
+  (templates it does not override come from the bundled <code>teal</code> theme).</p>
+
+<table class="admin-table">
+  <thead><tr><th>Theme</th><th>State</th><th></th></tr></thead>
+  <tbody>
+  <?php foreach ($themes as $t): ?>
+    <tr>
+      <td><code><?= Security::e($t) ?></code></td>
+      <td>
+        <?php if ($t === $current): ?>active
+        <?php elseif ($t === View::FALLBACK_THEME): ?>bundled fallback
+        <?php else: ?>installed<?php endif; ?>
+      </td>
+      <td class="admin-row-actions">
+        <?php if ($t !== $current && $t !== View::FALLBACK_THEME): ?>
+          <form method="post" action="<?= Security::e($baseUrl) ?>/admin/theme/<?= rawurlencode($t) ?>/delete"
+                onsubmit="return confirm('Delete theme “<?= Security::e($t) ?>” from the disk?')">
+            <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+            <button class="btn btn-danger" type="submit">delete</button>
+          </form>
+        <?php else: ?>
+          <span class="post-meta" title="The active theme and the bundled fallback cannot be removed.">—</span>
+        <?php endif; ?>
+      </td>
+    </tr>
+  <?php endforeach; ?>
+  </tbody>
+</table>
+
 <form class="post-form" method="post" action="<?= Security::e($baseUrl) ?>/admin/theme" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
-  <label>Theme .zip (must contain layout.php at its root)
+  <label>Install a theme pack (.zip, must contain <code>layout.php</code>)
     <input type="file" name="themezip" accept=".zip">
   </label>
   <div class="admin-actions">
     <button class="btn" type="submit">Install theme</button>
   </div>
-  <p class="post-excerpt">Installed themes: <?= Security::e(implode(', ', $themes)) ?></p>
 </form>

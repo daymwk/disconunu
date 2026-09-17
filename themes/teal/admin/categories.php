@@ -5,8 +5,11 @@
  * @var string $csrf
  */
 use DN\Security;
+use DN\View;
 ?>
 <h1>Categories</h1>
+
+<?php View::partial('admin/nav', ['active' => 'categories']); ?>
 
 <table class="admin-table">
   <thead><tr><th>Title</th><th>Slug</th><th>Visible</th><th></th></tr></thead>

@@ -77,4 +77,23 @@ final class Acl
     {
         return self::canAdminister($u);
     }
+
+    /**
+     * Deleting an account: superadmins only, never yourself, and never the last
+     * superadmin (the site would be left with nobody able to administer it).
+     * An admin can never delete a superadmin — they cannot reach this screen.
+     */
+    public static function canDeleteUser(?User $actor, ?User $target, int $superadminCount): bool
+    {
+        if (!self::canManageUsers($actor) || $target === null) {
+            return false;
+        }
+        if ($actor->id === $target->id) {
+            return false;
+        }
+        if ($target->role === self::SUPERADMIN && $superadminCount <= 1) {
+            return false;
+        }
+        return true;
+    }
 }

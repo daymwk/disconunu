@@ -280,6 +280,33 @@ echo "\n-- Roles & ACL --\n";
     assert_true(Acl::canDeletePost($sa, 'superadmin', $saPost->userId), 'superadmin can do anything');
 });
 
+($t)('user deletion rules: not yourself, not the last superadmin', function () {
+    $sa  = User::create('sa_del', 'sa_del@test.x', 'password-super-9', Acl::SUPERADMIN);
+    $ad  = User::create('ad_del', 'ad_del@test.x', 'password-admin-9', Acl::ADMIN);
+    $wr  = User::create('wr_del', 'wr_del@test.x', 'password-writer-9', Acl::WRITER);
+
+    $supers = User::countByRole(Acl::SUPERADMIN);
+    assert_true($supers >= 1, 'superadmin counted');
+
+    assert_eq(false, Acl::canDeleteUser($sa, $sa, $supers), 'cannot delete yourself');
+    assert_true(Acl::canDeleteUser($sa, $wr, $supers), 'superadmin deletes a writer');
+    assert_true(Acl::canDeleteUser($sa, $ad, $supers), 'superadmin deletes an admin');
+    assert_eq(false, Acl::canDeleteUser($ad, $wr, $supers), 'admin cannot manage accounts at all');
+
+    // a lone superadmin is protected, but is deletable once another one exists
+    $lone = User::create('sa_lone', 'sa_lone@test.x', 'password-super-8', Acl::SUPERADMIN);
+    $others = User::countByRole(Acl::SUPERADMIN) - 1;
+    assert_eq(false, Acl::canDeleteUser($sa, $lone, 1), 'last superadmin protected');
+    assert_true(Acl::canDeleteUser($sa, $lone, 2), 'deletable when another superadmin exists');
+    assert_true($others >= 1, 'two superadmins in the fixture');
+
+    $before = User::countByRole(Acl::WRITER);
+    $id = $wr->id;
+    $wr->delete();
+    assert_eq(null, User::findById($id), 'account deleted');
+    assert_eq($before - 1, User::countByRole(Acl::WRITER), 'role counter follows deletions');
+});
+
 echo "\n-- Settings --\n";
 
 ($t)('settings override config defaults, values are clamped', function () {

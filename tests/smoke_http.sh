@@ -26,6 +26,8 @@ ko(){ echo "  \033[31m✗\033[0m $1"; FAIL=$((FAIL+1)); }
 check(){ [ "$2" = "$3" ] && ok "$1" || ko "$1 (expected $3, got $2)"; }
 # Admin pages hold several forms (one CSRF token each): always take the FIRST one.
 csrf(){ curl -s -b "$1" -c "$1" "$BASE$2" | grep -oE 'name="csrf" value="[a-f0-9]{64}' | grep -oE '[a-f0-9]{64}' | head -1; }
+# Name of the theme the settings screen reports as active.
+active_theme(){ curl -s -b "$1" "$BASE/admin/settings" | grep -oE '<option value="[A-Za-z0-9_-]+" selected>' | head -1 | sed -e 's/.*value="//' -e 's/".*//'; }
 
 MODE="live"
 DB=""
@@ -161,15 +163,58 @@ if [ "$MODE" = "auto" ]; then
   CSRF=$(csrf "$CJ" /admin/settings)
   code=$(curl -s -b "$CJ" -o /dev/null -w '%{http_code}' -X POST "$BASE/admin/theme" -F "csrf=$CSRF" -F "themezip=@$TMPD/theme.zip")
   check "theme zip install -> 303" "$code" "303"
-  INSTALLED_THEME=smoketheme
+  INSTALLED_THEME=$(active_theme "$CJ")
   if curl -s "$BASE/" | grep -q 'SMOKETHEME'; then
-    ok "installed theme is active"
+    ok "installed theme is active (as “$INSTALLED_THEME”)"
   else
     ko "theme not applied -> $(curl -s -b "$CJ" "$BASE/admin/settings" | grep -oE 'flash-error[^<]*<[^>]*>[^<]{0,120}' | head -1)"
   fi
+
+  # the bundled fallback cannot be deleted
+  CSRF=$(csrf "$CJ" /admin/settings)
+  curl -s -b "$CJ" -o /dev/null -X POST "$BASE/admin/theme/teal/delete" --data-urlencode "csrf=$CSRF"
+  curl -s -b "$CJ" "$BASE/admin/settings" | grep -q '<code>teal</code>' && ok "bundled theme protected from deletion" || ko "bundled theme deleted"
+
+  # back to the bundled theme, then delete the installed one for real
   CSRF=$(csrf "$CJ" /admin/settings)
   curl -s -b "$CJ" -o /dev/null -X POST "$BASE/admin/settings" --data-urlencode "csrf=$CSRF" -d 'theme=teal'
   curl -s "$BASE/" | grep -q 'SMOKETHEME' && ko "theme switch back failed" || ok "theme switched back to teal"
+  CSRF=$(csrf "$CJ" /admin/settings)
+  code=$(curl -s -b "$CJ" -o /dev/null -w '%{http_code}' -X POST "$BASE/admin/theme/$INSTALLED_THEME/delete" --data-urlencode "csrf=$CSRF")
+  check "uninstall theme -> 303" "$code" "303"
+  curl -s -b "$CJ" "$BASE/admin/settings" | grep -q "<code>$INSTALLED_THEME</code>" && ko "theme still listed after delete" || ok "theme removed from the list"
+  INSTALLED_THEME=""   # nothing left for the cleanup trap
+
+  # shared admin navigation on every screen
+  for p in /admin /admin/categories /admin/users /admin/settings /admin/post/new; do
+    curl -s -b "$CJ" "$BASE$p" | grep -q 'admin-nav' && ok "admin nav present on $p" || ko "admin nav missing on $p"
+  done
+
+  # footer text is editable
+  CSRF=$(csrf "$CJ" /admin/settings)
+  curl -s -b "$CJ" -o /dev/null -X POST "$BASE/admin/settings" --data-urlencode "csrf=$CSRF" \
+    -d 'site_title=Smoke blog' -d 'footer_text=Smoke footer 42' -d 'posts_per_page=5' -d 'rss_enabled=1' -d 'theme=teal'
+  curl -s "$BASE/" | grep -q 'Smoke footer 42' && ok "footer text applied" || ko "footer text not applied"
+
+  # dashboard status filter
+  curl -s -b "$CJ" "$BASE/admin?status=draft" | grep -q 'Filtered:' && ok "dashboard filters by status" || ko "dashboard filter broken"
+
+  # user management: create then delete
+  CSRF=$(csrf "$CJ" /admin/users)
+  code=$(curl -s -b "$CJ" -o /dev/null -w '%{http_code}' -X POST "$BASE/admin/users/create" \
+    --data-urlencode "csrf=$CSRF" -d 'username=smoke_extra&email=smoke_extra@example.test&password=smoke-extra-pass-1&role=writer')
+  check "create user from the admin -> 303" "$code" "303"
+  users_page=$(curl -s -b "$CJ" "$BASE/admin/users")
+  echo "$users_page" | grep -q 'smoke_extra' && ok "new user listed" || ko "new user missing"
+  echo "$users_page" | grep -q 'smoke_extra</strong>' && echo "$users_page" | grep -qE 'badge-role">writer' && ok "new user has the writer role" || ko "role wrong"
+
+  CSRF=$(csrf "$CJ" /admin/users)
+  DUID=$(echo "$users_page" | grep -oE '/admin/users/[0-9]+/delete' | tail -1 | grep -oE '[0-9]+')
+  code=$(curl -s -b "$CJ" -o /dev/null -w '%{http_code}' -X POST "$BASE/admin/users/$DUID/delete" --data-urlencode "csrf=$CSRF")
+  check "delete user -> 303" "$code" "303"
+  curl -s -b "$CJ" "$BASE/admin/users" | grep -q 'smoke_extra' && ko "user still listed after delete" || ok "user deleted"
+  # the superadmin cannot delete their own account (no delete form on their row)
+  check "no self-delete button for the acting superadmin" "$(curl -s -b "$CJ" "$BASE/admin/users" | grep -c '/admin/users/[0-9]*/delete')" "1"
 
   # writer ACL
   CSRF=$(csrf "$CJ2" /admin/login)
