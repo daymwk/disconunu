@@ -3,57 +3,96 @@
 declare(strict_types=1);
 
 /**
- * CLI d'installation et de maintenance :
- *   bin/disconunu migrate            — applique les migrations
- *   bin/disconunu user <login> <email> [--admin] — crée un utilisateur (prompt mdp)
- *   bin/disconunu password <login>   — change un mot de passe
+ * Install / maintenance CLI:
+ *   bin/disconunu migrate                 — apply pending migrations (+ default category, role cleanup)
+ *   bin/disconunu user <login> <email> [--role=writer|admin|superadmin]
+ *   bin/disconunu password <login>        — change a password
+ *   bin/disconunu role <login> <role>     — change a role
+ *
+ * Passwords are read from stdin (echo off) or from the DN_USER_PASSWORD
+ * environment variable, which is what the test suite uses.
  */
 
 require __DIR__ . '/../autoload.php';
 
+use DN\Acl;
 use DN\App;
 use DN\Database;
 use DN\Migrator;
+use DN\Model\Post;
 use DN\Model\User;
 
 App::boot();
 
-$argv0 = $argv[1] ?? 'help';
+$cmd = $argv[1] ?? 'help';
 
-switch ($argv0) {
+/** Read a password from DN_USER_PASSWORD or an interactive prompt. */
+function ask_password(string $label): string
+{
+    $pw = getenv('DN_USER_PASSWORD');
+    if (is_string($pw) && $pw !== '') {
+        return $pw;
+    }
+    echo $label . ' ';
+    system('stty -echo 2>/dev/null');
+    $pw = rtrim((string)fgets(STDIN), "\n");
+    system('stty echo 2>/dev/null');
+    echo "\n";
+    return $pw;
+}
+
+/** Parse --role=<r> / --admin / --superadmin out of the argument list. */
+function parse_role(array $argv): string
+{
+    foreach ($argv as $a) {
+        if (str_starts_with($a, '--role=')) {
+            $role = substr($a, 7);
+            if (!Acl::isValidRole($role)) {
+                fwrite(STDERR, "Invalid role: {$role} (expected writer|admin|superadmin)\n");
+                exit(1);
+            }
+            return $role;
+        }
+    }
+    if (in_array('--superadmin', $argv, true)) {
+        return Acl::SUPERADMIN;
+    }
+    if (in_array('--admin', $argv, true)) {
+        return Acl::ADMIN;
+    }
+    return Acl::WRITER;
+}
+
+switch ($cmd) {
     case 'migrate':
         $applied = Migrator::run();
-        echo $applied ? "Migrations appliquées : " . implode(', ', $applied) . "\n" : "Schéma à jour.\n";
-        echo "Base : " . Database::get()->driver() . ' — ' . Database::get()->pdo()->query('SELECT COUNT(*) FROM dn_post')->fetchColumn() . " article(s)\n";
+        echo $applied ? 'Applied: ' . implode(', ', $applied) . "\n" : "Schema up to date.\n";
+        echo 'Engine: ' . Database::get()->driver()
+            . ' — ' . Database::get()->pdo()->query('SELECT COUNT(*) FROM dn_post')->fetchColumn()
+            . " post(s), "
+            . Database::get()->pdo()->query('SELECT COUNT(*) FROM dn_category')->fetchColumn()
+            . " categor(y|ies)\n";
         break;
 
     case 'user':
         $login = $argv[2] ?? null;
         $email = $argv[3] ?? null;
-        $role  = in_array('--admin', $argv, true) ? 'admin' : 'author';
-        if (!$login || !$email) {
-            fwrite(STDERR, "Usage: bin/disconunu user <login> <email> [--admin]\n");
+        $role  = parse_role($argv);
+        if (!$login || !$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            fwrite(STDERR, "Usage: bin/disconunu user <login> <email> [--role=writer|admin|superadmin]\n");
             exit(1);
         }
         if (User::findByUsername($login) !== null || User::emailExists($email)) {
-            fwrite(STDERR, "Login ou email déjà pris.\n");
+            fwrite(STDERR, "Login or email already taken.\n");
             exit(1);
         }
-        // Mot de passe : stdin interactif, ou DN_USER_PASSWORD pour le scripting/tests.
-        $pw = getenv('DN_USER_PASSWORD');
-        if (!is_string($pw) || $pw === '') {
-            echo "Mot de passe (masqué) : ";
-            system('stty -echo 2>/dev/null');
-            $pw = rtrim((string)fgets(STDIN), "\n");
-            system('stty echo 2>/dev/null');
-            echo "\n";
-        }
+        $pw = ask_password('Password (hidden):');
         if (strlen($pw) < 10) {
-            fwrite(STDERR, "Mot de passe trop court (min 10).\n");
+            fwrite(STDERR, "Password too short (min 10).\n");
             exit(1);
         }
         User::create($login, $email, $pw, $role);
-        echo "Utilisateur créé : {$login} ({$role})\n";
+        echo "User created: {$login} ({$role})\n";
         break;
 
     case 'password':
@@ -64,23 +103,54 @@ switch ($argv0) {
         }
         $u = User::findByUsername($login);
         if ($u === null) {
-            fwrite(STDERR, "Utilisateur inconnu.\n");
+            fwrite(STDERR, "Unknown user.\n");
             exit(1);
         }
-        echo "Nouveau mot de passe (masqué) : ";
-        system('stty -echo');
-        $pw = rtrim((string)fgets(STDIN), "\n");
-        system('stty echo');
-        echo "\n";
+        $pw = ask_password('New password (hidden):');
         if (strlen($pw) < 10) {
-            fwrite(STDERR, "Mot de passe trop court (min 10).\n");
+            fwrite(STDERR, "Password too short (min 10).\n");
             exit(1);
         }
-        $st = Database::get()->pdo()->prepare('UPDATE dn_user SET password_hash = ? WHERE id = ?');
-        $st->execute([User::hashPassword($pw), $u->id]);
-        echo "Mot de passe mis à jour.\n";
+        Database::get()->pdo()
+            ->prepare('UPDATE dn_user SET password_hash = ? WHERE id = ?')
+            ->execute([User::hashPassword($pw), $u->id]);
+        echo "Password updated.\n";
+        break;
+
+    case 'role':
+        $login = $argv[2] ?? null;
+        $role  = $argv[3] ?? '';
+        if (!$login || !Acl::isValidRole($role)) {
+            fwrite(STDERR, "Usage: bin/disconunu role <login> <writer|admin|superadmin>\n");
+            exit(1);
+        }
+        $u = User::findByUsername($login);
+        if ($u === null) {
+            fwrite(STDERR, "Unknown user.\n");
+            exit(1);
+        }
+        $u->setRole($role);
+        echo "Role of {$login} set to {$role}.\n";
+        break;
+
+    case 'reindex':
+        if (Post::rebuildIndex()) {
+            echo "Search index rebuilt.\n";
+        } else {
+            echo "Nothing to rebuild (only SQLite uses a local FTS index).\n";
+        }
+        break;
+
+    case 'seed':
+        require __DIR__ . '/seed-demo.php';
         break;
 
     default:
-        echo "disconunu — commandes : migrate | user <login> <email> [--admin] | password <login>\n";
+        echo "disconunu — commands:\n"
+            . "  migrate\n"
+            . "  user <login> <email> [--role=writer|admin|superadmin]\n"
+            . "  password <login>\n"
+            . "  role <login> <writer|admin|superadmin>\n"
+            . "  reindex                  rebuild the SQLite full-text index\n"
+            . "  seed [--reset] [count]   (alias for bin/seed-demo.php)\n";
 }

@@ -1,18 +1,18 @@
 <?php
-/** Accueil : liste paginée des articles publiés.
+/** Home: paginated list of published posts.
  * @var list<\DN\Model\Post> $posts
  * @var int $page
  * @var int $pages
  * @var string $baseUrl
- * @var string $csrf
  */
 use DN\Security;
+use DN\View;
 ?>
 <section class="post-list">
 <?php if (!$posts): ?>
   <div class="post-card">
-    <h2>Aucun article pour l’instant</h2>
-    <p class="post-excerpt">Le compteur est à zéro. <a href="<?= Security::e($baseUrl) ?>/admin/login">Connecte-toi</a> et écris le premier.</p>
+    <h2>No posts yet</h2>
+    <p class="post-excerpt">The counter reads zero. <a href="<?= Security::e($baseUrl) ?>/admin/login">Sign in</a> and write the first one.</p>
   </div>
 <?php endif; ?>
 
@@ -20,23 +20,13 @@ use DN\Security;
   <article class="post-card">
     <h2><a href="<?= Security::e($baseUrl) ?>/post/<?= rawurlencode($p->slug) ?>"><?= Security::e($p->title) ?></a></h2>
     <p class="post-meta">
-      <span>par <?= Security::e($p->authorName ?? '?') ?></span>
-      <?php if ($p->publishedAt): ?><time datetime="<?= Security::e($p->publishedAt) ?>Z"><?= Security::e(date('d/m/Y', strtotime($p->publishedAt))) ?></time><?php endif; ?>
+      <span>by <?= Security::e($p->authorName ?? '?') ?></span>
+      <?php if ($p->publishedAt): ?><time datetime="<?= Security::e($p->publishedAt) ?>Z"><?= Security::e(date('d M Y', strtotime($p->publishedAt))) ?></time><?php endif; ?>
     </p>
     <div class="post-excerpt"><?= Security::e($p->excerpt) ?></div>
-    <a class="more-link" href="<?= Security::e($baseUrl) ?>/post/<?= rawurlencode($p->slug) ?>">Lire la suite →</a>
+    <a class="more-link" href="<?= Security::e($baseUrl) ?>/post/<?= rawurlencode($p->slug) ?>">Read more →</a>
   </article>
 <?php endforeach; ?>
 </section>
 
-<?php if ($pages > 1): ?>
-<nav class="pagination" aria-label="Pagination">
-  <?php for ($i = 1; $i <= $pages; $i++): ?>
-    <?php if ($i === $page): ?>
-      <li class="current"><?= $i ?></li>
-    <?php else: ?>
-      <li><a href="<?= Security::e($baseUrl) ?>/?page=<?= $i ?>"><?= $i ?></a></li>
-    <?php endif; ?>
-  <?php endfor; ?>
-</nav>
-<?php endif; ?>
+<?= View::pagination($page, $pages, Security::e($baseUrl) . '/?page={page}') ?>

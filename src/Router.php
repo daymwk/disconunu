@@ -4,8 +4,8 @@ declare(strict_types=1);
 namespace DN;
 
 /**
- * Routeur minimaliste : motifs {param}, méthodes, envoi 404/405 propre.
- * Pas de dépendance — un tableau de routes suffit à ce niveau.
+ * Minimal router: {param} patterns, method matching, clean 404/405.
+ * No dependency — a plain route table is enough at this scale.
  */
 final class Router
 {
@@ -51,7 +51,7 @@ final class Router
             return;
         }
         if ($pathMatched) {
-            Http::abort(405, 'Méthode non autorisée');
+            Http::abort(405, 'Method not allowed.');
         }
         Http::abort(404, 'Page introuvable');
     }

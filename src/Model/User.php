@@ -59,7 +59,24 @@ final class User
         return (int)Database::get()->pdo()->query('SELECT COUNT(*) FROM dn_user')->fetchColumn();
     }
 
-    /** Hash moderne : argon2id si dispo, sinon bcrypt (coût 12). */
+    /** @return list<self> */
+    public static function all(): array
+    {
+        $rows = Database::get()->pdo()->query('SELECT * FROM dn_user ORDER BY id')->fetchAll();
+        return array_map(static fn(array $r): self => new self($r), $rows);
+    }
+
+    public function setRole(string $role): void
+    {
+        if (!\DN\Acl::isValidRole($role)) {
+            throw new \InvalidArgumentException("Invalid role: {$role}");
+        }
+        $st = Database::get()->pdo()->prepare('UPDATE dn_user SET role = ? WHERE id = ?');
+        $st->execute([$role, $this->id]);
+        $this->role = $role;
+    }
+
+    /** Modern hashing: argon2id when available, bcrypt (cost 12) otherwise. */
     public static function hashPassword(string $plain): string
     {
         $algo = defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT;
@@ -71,7 +88,7 @@ final class User
         return password_verify($plain, $this->passwordHash);
     }
 
-    /** Recalcule le hash à chaud si l'algo/coût a changé (rehash transparent). */
+    /** Transparently rehash on login when the algorithm or cost changed. */
     public function rehashIfNeeded(string $plain): void
     {
         if (password_needs_rehash($this->passwordHash, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT)) {
@@ -93,6 +110,11 @@ final class User
 
     public function isAdmin(): bool
     {
-        return $this->role === 'admin';
+        return \DN\Acl::canPublish($this);
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === \DN\Acl::SUPERADMIN;
     }
 }

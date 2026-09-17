@@ -1,12 +1,11 @@
 <?php
-/** Page d'erreur.
+/** Error page (404/403/…).
  * @var int $code
  * @var string $message
  * @var string $baseUrl
  */
+use DN\Security;
 ?>
-<div class="error-page">
-  <div class="code"><?= (int)$code ?></div>
-  <p><?= htmlspecialchars($message ?: 'Rien ici.', ENT_QUOTES, 'UTF-8') ?></p>
-  <p><a class="more-link" href="<?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>/">← Retour à l’accueil</a></p>
-</div>
+<h1><?= (int)($code ?? 404) ?></h1>
+<p class="post-excerpt"><?= Security::e($message ?? 'Page not found.') ?></p>
+<p><a class="more-link" href="<?= Security::e($baseUrl) ?>/">← Back to the home page</a></p>

@@ -5,7 +5,7 @@ namespace DN;
 
 use DN\Model\User;
 
-/** Authentification : bcrypt/argon2, anti-brute-force par tentative, régénération de session. */
+/** Authentication: argon2id/bcrypt, per-attempt brute-force limiting, session regeneration. */
 final class Auth
 {
     public static function attempt(string $username, string $password): bool
@@ -18,7 +18,7 @@ final class Auth
         $now  = time();
         $atts = &$_SESSION[$key];
         if (is_array($atts) && $atts['count'] >= (int)$sec['login_max_attempts'] && ($now - $atts['last']) < (int)$sec['login_lockout']) {
-            return false; // verrouillé
+            return false; // locked out
         }
 
         $user = User::findByUsername($username);
@@ -30,7 +30,7 @@ final class Auth
         $user->rehashIfNeeded($password);
         unset($_SESSION[$key]);
 
-        // régénération anti-fixation
+        // regenerate to defeat session fixation
         session_regenerate_id(true);
         $_SESSION['user_id'] = $user->id;
         return true;
@@ -64,7 +64,7 @@ final class Auth
     public static function requireAuth(): void
     {
         if (!self::check()) {
-            Http::flash('info', 'Connecte-toi pour accéder à l’administration.');
+            Http::flash('info', 'Sign in to access the admin area.');
             Http::redirect('/admin/login');
         }
     }
@@ -74,13 +74,21 @@ final class Auth
         self::requireAuth();
         $u = self::user();
         if ($u === null || !$u->isAdmin()) {
-            Http::abort(403, 'Réservé aux admins.');
+            Http::abort(403, 'Admins only.');
+        }
+    }
+
+    public static function requireSuperAdmin(): void
+    {
+        self::requireAuth();
+        if (!Acl::canAdminister(self::user())) {
+            Http::abort(403, 'Superadmins only.');
         }
     }
 
     private static function clientIp(): string
     {
-        // REMOTE_ADDR only : pas de X-Forwarded-For (spoofable ; derrière un proxy, faire confiance en amont)
+        // REMOTE_ADDR only: no X-Forwarded-For (spoofable; behind a proxy, trust the front layer instead)
         return (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
     }
 }

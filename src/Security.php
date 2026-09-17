@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace DN;
 
-/** Protection CSRF (jetons par session) + échappement de sortie. */
+/** CSRF protection (per-session tokens), output escaping, HTML sanitizing. */
 final class Security
 {
     public static function csrfToken(): string
@@ -28,7 +28,7 @@ final class Security
         unset($_SESSION['csrf']);
     }
 
-    /** Échappement HTML sortant (tout affichage passe par là). */
+    /** Output escaping — every variable printed in a template goes through here. */
     public static function e(?string $s): string
     {
         return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
@@ -36,8 +36,8 @@ final class Security
 
     /**
      * Nettoyage du contenu riche des posts : allowlist de balises, strip des
-     * événements on*, javascript:, attributes de tracking. (HTML Purifier serait
-     * l'idéal ; cette allowlist stricte est le standard minimal raisonnable sans dépendance.)
+     * on* event handlers, javascript: URLs, tracking attributes. (HTML Purifier would be
+     * ideal; this strict allowlist is the reasonable no-dependency baseline.)
      */
     public static function sanitizeHtml(string $html): string
     {
@@ -45,7 +45,7 @@ final class Security
                  . '<h2><h3><h4><h5><h6><img><figure><figcaption><table><thead><tbody><tr><th><td><hr>';
         $html = strip_tags($html, $allowed);
 
-        // vider les attributs dangereux (évènements on*, style avec expression, javascript:)
+        // strip dangerous attributes (on* handlers, expression() styles, javascript: URLs)
         $html = preg_replace_callback(
             '#<(\w+)\b([^>]*)>#i',
             static function (array $m): string {

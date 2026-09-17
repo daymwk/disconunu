@@ -1,5 +1,0 @@
-# Turn Rewrite Engine On
-RewriteEngine On
-
-# Rewrite article links
-RewriteRule ^article/([0-9]+) controller/get_article.php?idArticle=$1 [NC,L]

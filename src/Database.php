@@ -7,8 +7,8 @@ use PDO;
 use RuntimeException;
 
 /**
- * Couche DB multi-provider : sqlite (défaut), mysql, pgsql.
- * Les modèles n'écrivent que du SQL compatible (typeNormal() traduit les types DDL).
+ * Multi-provider DB layer: sqlite (default), mysql, pgsql.
+ * Models only emit portable SQL (type() translates DDL types per dialect).
  */
 final class Database
 {
@@ -28,7 +28,7 @@ final class Database
         return self::$instance;
     }
 
-    /** Test uniquement : réinitialise la connexion (base fraîche entre tests). */
+    /** Test-only: reset the connection (fresh database between test runs). */
     public static function resetConnection(): void
     {
         self::$pdo = null;
@@ -78,7 +78,7 @@ final class Database
         return self::$pdo;
     }
 
-    /** Type SQL générique -> dialecte local (migrations). */
+    /** Generic SQL type -> local dialect (used by migrations). */
     public function type(string $generic): string
     {
         return match (true) {

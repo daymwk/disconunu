@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace DN;
 
-/** En-têtes sécurisés, réponses, redirections, 404. */
+/** Security headers, responses, redirects, 404/403 handling. */
 final class Http
 {
     public static function securityHeaders(): void
@@ -15,13 +15,13 @@ final class Http
         header('Content-Security-Policy: ' . implode('; ', [
             "default-src 'self'",
             "img-src 'self' data:",
-            "style-src 'self' 'unsafe-inline'",   // styles inline du thème minimaliste ; à durcir en CSP nonce si besoin
+            "style-src 'self' 'unsafe-inline'",   // the minimal theme inlines styles; tighten to a nonce-based CSP if needed
             "script-src 'self'",
             "form-action 'self'",
             "frame-ancestors 'self'",
             "base-uri 'self'",
         ]));
-        header('X-XSS-Protection: 0'); // obsolète, à éteindre explicitement (CSP fait le travail)
+        header('X-XSS-Protection: 0'); // deprecated: switched off explicitly (CSP does the work)
     }
 
     /** @param array<string,string> $params */

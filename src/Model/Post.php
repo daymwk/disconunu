@@ -17,6 +17,7 @@ final class Post
     public ?string $publishedAt;
     public ?string $updatedAt;
     public ?string $authorName = null;
+    public ?string $authorRole = null;
 
     /** @param array<string,mixed> $row */
     public function __construct(array $row)
@@ -31,9 +32,10 @@ final class Post
         $this->publishedAt = $row['published_at'] !== null ? (string)$row['published_at'] : null;
         $this->updatedAt   = $row['updated_at'] !== null ? (string)$row['updated_at'] : null;
         $this->authorName  = isset($row['username']) ? (string)$row['username'] : null;
+        $this->authorRole  = isset($row['role']) ? (string)$row['role'] : null;
     }
 
-    private const SELECT_JOINED = 'SELECT p.*, u.username FROM dn_post p JOIN dn_user u ON u.id = p.user_id';
+    private const SELECT_JOINED = 'SELECT p.*, u.username, u.role FROM dn_post p JOIN dn_user u ON u.id = p.user_id';
 
     public static function findBySlug(string $slug, bool $publishedOnly = true): ?self
     {
@@ -83,8 +85,44 @@ final class Post
         return array_map(static fn(array $r): self => new self($r), $st->fetchAll());
     }
 
+    /** @return list<self> */
+    public static function allByAuthor(int $userId, int $limit = 500): array
+    {
+        $st = Database::get()->pdo()->prepare(self::SELECT_JOINED . ' WHERE p.user_id = ? ORDER BY p.id DESC LIMIT ?');
+        $st->bindValue(1, $userId, \PDO::PARAM_INT);
+        $st->bindValue(2, $limit, \PDO::PARAM_INT);
+        $st->execute();
+        return array_map(static fn(array $r): self => new self($r), $st->fetchAll());
+    }
+
+    /** Published-post count within a category. */
+    public static function countPublishedIn(int $categoryId): int
+    {
+        $st = Database::get()->pdo()->prepare(
+            "SELECT COUNT(*) FROM dn_post p JOIN dn_post_category pc ON pc.post_id = p.id
+             WHERE pc.category_id = ? AND p.status = 'published' AND p.published_at <= ?");
+        $st->execute([$categoryId, Database::now()]);
+        return (int)$st->fetchColumn();
+    }
+
+    /** @return list<self> */
+    public static function publishedPageIn(int $categoryId, int $page, int $perPage): array
+    {
+        $offset = max(0, ($page - 1) * $perPage);
+        $st = Database::get()->pdo()->prepare(
+            self::SELECT_JOINED . " JOIN dn_post_category pc ON pc.post_id = p.id"
+            . " WHERE pc.category_id = ? AND p.status = 'published' AND p.published_at <= ?"
+            . ' ORDER BY p.published_at DESC LIMIT ? OFFSET ?');
+        $st->bindValue(1, $categoryId, \PDO::PARAM_INT);
+        $st->bindValue(2, Database::now());
+        $st->bindValue(3, $perPage, \PDO::PARAM_INT);
+        $st->bindValue(4, $offset, \PDO::PARAM_INT);
+        $st->execute();
+        return array_map(static fn(array $r): self => new self($r), $st->fetchAll());
+    }
+
     /**
-     * Recherche plein texte (FTS5 sur sqlite, LIKE ailleurs), uniquement articles publiés.
+     * Full-text search (FTS5 on sqlite, LIKE elsewhere), published posts only.
      * @return list<self>
      */
     public static function search(string $q, int $limit = 20): array
@@ -96,7 +134,7 @@ final class Post
         $db = Database::get();
 
         if ($db->driver() === 'sqlite' && self::ftsAvailable()) {
-            // requête FTS "OR" permissive sur les termes, bornée
+            // permissive OR query over the terms, bounded by FTS syntax escaping
             $terms = preg_split('/\s+/', $q) ?: [];
             $match = implode(' OR ', array_map(
                 static fn(string $t): string => '"' . str_replace('"', '""', $t) . '"',
@@ -106,11 +144,18 @@ final class Post
                 . " JOIN dn_post_fts f ON f.rowid = p.id"
                 . " WHERE dn_post_fts MATCH ? AND p.status = 'published'"
                 . ' ORDER BY rank LIMIT ?';
-            $st = $db->pdo()->prepare($sql);
-            $st->bindValue(1, $match);
-            $st->bindValue(2, $limit, \PDO::PARAM_INT);
-            $st->execute();
-            return array_map(static fn(array $r): self => new self($r), $st->fetchAll());
+            try {
+                $st = $db->pdo()->prepare($sql);
+                $st->bindValue(1, $match);
+                $st->bindValue(2, $limit, \PDO::PARAM_INT);
+                $st->execute();
+                return array_map(static fn(array $r): self => new self($r), $st->fetchAll());
+            } catch (\Throwable $e) {
+                // A damaged FTS index must never take a page down: log it, repair
+                // it in the background of this request, and answer with LIKE.
+                error_log('FTS search failed (' . $e->getMessage() . '), rebuilding the index');
+                self::rebuildIndex();
+            }
         }
 
         // fallback portable (mysql/pgsql, ou sqlite sans FTS5)
@@ -120,6 +165,27 @@ final class Post
             . ' ORDER BY p.published_at DESC LIMIT ?');
         $st->execute([$like, $like, $like, $limit]);
         return array_map(static fn(array $r): self => new self($r), $st->fetchAll());
+    }
+
+    /**
+     * Rebuild the FTS index from the content table (sqlite only). Repairs an
+     * index that got out of sync or damaged; a no-op elsewhere.
+     */
+    public static function rebuildIndex(): bool
+    {
+        $db = Database::get();
+        if ($db->driver() !== 'sqlite') {
+            return false;
+        }
+        // Recreate the table/triggers if they vanished, then re-index everything.
+        \DN\Migrator::ensureSearchIndex();
+        try {
+            $db->pdo()->exec("INSERT INTO dn_post_fts (dn_post_fts) VALUES ('rebuild')");
+            return true;
+        } catch (\Throwable $e) {
+            error_log('FTS rebuild failed: ' . $e->getMessage());
+            return false;
+        }
     }
 
     private static function ftsAvailable(): bool
@@ -171,7 +237,7 @@ final class Post
         $st->execute([$this->id]);
     }
 
-    /** Slug URL-safe, ASCII si translittérable, unique (suffixe -2, -3…). */
+    /** URL-safe slug, ASCII when transliterable, unique (-2, -3… suffix on collision). */
     public static function uniqueSlug(string $title, ?int $ignoreId = null): string
     {
         $slug = self::slugify($title);

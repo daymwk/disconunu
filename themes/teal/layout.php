@@ -1,54 +1,47 @@
 <?php
-/**
- * Layout du thème "teal" — héritier de la DA 2017 (vert-bleu #29d9c2/#00a2a5),
- * reconstruite en CSS moderne : variables, dark mode auto, pas de framework.
- *
- * @var string $content  rendu par le template
+/** Theme "teal" layout.
+ * @var string $content  rendered by the template
  * @var string $appName
  * @var string $subtitle
  * @var string $baseUrl
  * @var string $themeUrl
+ * @var string|null $logoUrl
+ * @var bool $rssEnabled
  * @var \DN\Model\User|null $user
  * @var array<string,list<string>> $flashes
- * @var \DN\Model\Menu|null $menu (si fourni par la route)
+ * @var list<\DN\Model\Category> $cats (when provided by the route)
  */
 use DN\Security;
-use DN\Http;
 ?>
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="Disco nunu <?= \DN\App::VERSION ?>">
 <title><?= Security::e($title ?? $appName) ?> — <?= Security::e($appName) ?></title>
-<link rel="stylesheet" href="<?= Security::e($themeUrl) ?>/style.css">
-<link rel="alternate" type="application/rss+xml" title="<?= Security::e($appName) ?> — flux" href="<?= Security::e($baseUrl) ?>/feed">
+<link rel="stylesheet" href="<?= Security::e($themeUrl) ?>/css/style.css">
+<?php if ($rssEnabled): ?><link rel="alternate" type="application/rss+xml" title="<?= Security::e($appName) ?> — feed" href="<?= Security::e($baseUrl) ?>/feed"><?php endif; ?>
 </head>
 <body>
 <header class="site-header">
   <div class="wrap header-grid">
     <a class="brand" href="<?= Security::e($baseUrl) ?>/">
-      <span class="brand-mark">◍</span>
+      <?php if ($logoUrl): ?><img class="brand-logo" src="<?= Security::e($logoUrl) ?>" alt="" width="40" height="40"><?php else: ?><span class="brand-mark">◍</span><?php endif; ?>
       <span class="brand-text">
         <strong><?= Security::e($appName) ?></strong>
         <small><?= Security::e($subtitle) ?></small>
       </span>
     </a>
     <nav class="site-nav">
-      <?php if (!empty($menu)): ?>
-        <?php foreach ($menu->items() as $item):
-            $href = str_starts_with($item['target'], 'http')
-                ? $item['target']
-                : $baseUrl . '/' . ltrim($item['target'], '/'); ?>
-          <a href="<?= Security::e($href) ?>"><?= Security::e($item['title']) ?></a>
-        <?php endforeach; ?>
-      <?php endif; ?>
-      <a href="<?= Security::e($baseUrl) ?>/search">Recherche</a>
+      <?php foreach (($cats ?? []) as $cat): ?>
+        <a href="<?= Security::e($baseUrl) ?>/category/<?= rawurlencode($cat->slug) ?>"><?= Security::e($cat->title) ?></a>
+      <?php endforeach; ?>
+      <a href="<?= Security::e($baseUrl) ?>/search">Search</a>
       <?php if ($user): ?>
         <a class="btn-admin" href="<?= Security::e($baseUrl) ?>/admin"><?= Security::e($user->username) ?></a>
       <?php else: ?>
-        <a class="btn-admin" href="<?= Security::e($baseUrl) ?>/admin/login">Connexion</a>
+        <a class="btn-admin" href="<?= Security::e($baseUrl) ?>/admin/login">Sign in</a>
       <?php endif; ?>
     </nav>
   </div>
@@ -66,8 +59,8 @@ use DN\Http;
 
 <footer class="site-footer">
   <div class="wrap">
-    <span><?= Security::e($appName) ?> — un CMS minimaliste, relancé en 2026.</span>
-    <span><a href="<?= Security::e($baseUrl) ?>/feed">RSS</a></span>
+    <span><?= Security::e(\DN\Model\Settings::footerText()) ?></span>
+    <?php if ($rssEnabled): ?><span><a href="<?= Security::e($baseUrl) ?>/feed">RSS</a></span><?php endif; ?>
   </div>
 </footer>
 </body>

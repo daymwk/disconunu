@@ -45,7 +45,13 @@ body {
   color: var(--ink);
   background: var(--paper);
   -webkit-font-smoothing: antialiased;
+  /* sticky footer: main grows so the footer sits at the bottom even on short pages */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
+
+main.wrap { flex: 1 0 auto; }
 
 .wrap {
   max-width: 1040px;
@@ -161,20 +167,22 @@ main.wrap { padding-block: 2.2rem 3rem; min-height: 60vh; }
   font-style: italic;
 }
 
-/* ---------- pagination ---------- */
-.pagination {
+/* ---------- pagination (windowed: 1 … 4 [5] 6 … 98, wraps if needed) ---------- */
+.pagination { margin: 2rem 0 0; }
+.pagination-inner {
   display: flex;
+  flex-wrap: wrap;
   gap: .4rem;
-  list-style: none;
-  padding: 0;
-  margin: 2rem 0 0;
+  align-items: center;
   font-family: var(--font-ui);
+  font-size: .92rem;
 }
-.pagination a, .pagination .current {
-  display: inline-block;
+.pagination a, .pagination .current, .pagination .pagination-gap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 2.2rem;
-  text-align: center;
-  padding: .4rem .5rem;
+  padding: .4rem .55rem;
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--ink);
@@ -183,6 +191,7 @@ main.wrap { padding-block: 2.2rem 3rem; min-height: 60vh; }
 }
 .pagination a:hover { border-color: var(--teal); color: var(--teal-deep); }
 .pagination .current { background: var(--teal); border-color: var(--teal-deep); color: #fff; }
+.pagination .pagination-gap { border-color: transparent; background: transparent; }
 
 /* ---------- flash ---------- */
 .flash {
@@ -278,7 +287,21 @@ input:focus, textarea:focus, select:focus {
   font-size: .85rem;
   color: var(--ink-soft);
 }
-.site-footer .wrap { display: flex; justify-content: space-between; padding-block: 1.2rem; }
+.site-footer .wrap { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding-block: 1.2rem; }
+
+.brand-logo { border-radius: 8px; display: block; }
+
+/* ---------- admin ---------- */
+.admin-nav { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin-bottom: 1.6rem; }
+.admin-nav form { margin: 0; }
+.admin-row-actions form { display: inline; margin: 0; }
+.inline-form { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.inline-form input[type=text] { min-width: 10rem; }
+.cat-picker { border: 1px solid var(--line); border-radius: var(--radius); padding: .8rem 1rem; display: grid; gap: .4rem; font-family: var(--font-ui); }
+.cat-picker legend { font-weight: 600; color: var(--ink-soft); padding-inline: .3rem; font-size: .9rem; }
+.cat-check { display: inline-flex; align-items: center; gap: .4rem; font-weight: 400; }
+.badge-role { background: color-mix(in srgb, var(--teal-deep) 18%, var(--card)); color: var(--teal-deep); }
+form small { color: var(--ink-soft); font-weight: 400; }
 .site-footer a { color: var(--teal-deep); }
 
 /* ---------- erreurs ---------- */
