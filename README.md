@@ -1,4 +1,4 @@
-# Disco nunu
+# disconunu
 
 A lightweight, self-hosted CMS for blogs and small websites. PHP, SQLite, server-rendered pages — no Composer dependencies, JavaScript framework or build step.
 
@@ -6,8 +6,8 @@ A lightweight, self-hosted CMS for blogs and small websites. PHP, SQLite, server
 
 - **Posts:** drafts, publishing, unique slugs, HTML content with an allowlist sanitizer, excerpts and authenticated previews.
 - **Menus and categories:** attach a post to multiple categories; show or hide each category in navigation. Uncategorized posts use **General**.
-- **Administration:** responsive navigation, searchable and paginated post/category/account lists, filters, clear publishing permissions and editor shortcuts.
-- **Site identity:** editable title, tagline and footer; the original logo is bundled, with optional custom logo upload and reset.
+- **Administration:** responsive navigation, searchable and paginated post/category/account lists, filters, clear publishing permissions, editor shortcuts and an audit log of admin actions.
+- **Site identity:** editable title, tagline and footer; a disco-ball logo is bundled, with optional custom logo upload and reset.
 - **Publishing:** configurable public page size, responsive windowed pagination, search and an optional RSS feed.
 - **Themes:** upload a ZIP, install without activating, switch themes separately and download a starter template. Administration stays on the bundled interface.
 - **Small footprint:** SQLite by default; optional MySQL/PostgreSQL adapters. No third-party runtime packages.
@@ -83,11 +83,15 @@ Upload a PNG, JPEG, GIF or WebP logo (maximum 512 KiB), or reset to the default.
 2. Customize its PHP layout and CSS; see [`examples/starter-theme/README.md`](examples/starter-theme/README.md).
 3. Upload the ZIP. Leave **Activate after installation** unchecked to install without changing the live site.
 4. Select an installed theme and save settings to activate it later.
-5. Switch away before uninstalling a theme. The bundled `teal` fallback cannot be removed.
+5. Switch away before uninstalling a theme. The default public theme is `maison`; the bundled `teal` fallback cannot be removed.
 
 The ZIP must contain `layout.php`, either at its root or inside one enclosing theme folder. Missing public templates use the bundled fallback. Administration uses the bundled templates regardless of the selected public theme.
 
 **Themes execute PHP with the application's permissions. Only install trusted source code.** Archive validation prevents unsafe paths and oversized extraction; it does not sandbox PHP. Keep the `themes/` directory writable only when installing/removing themes if your deployment supports that workflow.
+
+### Audit log
+
+Superadmins open **Logs** (`/admin/logs`) to see who did what and when: sign-ins (including failed attempts with the login tried), sign-outs, first-account setup, post, category, user, settings, logo and theme changes. Each entry stores the time (UTC), account, client IP, action and target. Passwords, CSRF tokens and post bodies are never recorded. Entries are kept until removed from the `dn_admin_log` table; disconunu does not purge them.
 
 ## Configuration
 
@@ -101,9 +105,9 @@ Environment variables override defaults in [`config/config.php`](config/config.p
 | `DN_DB_PORT` | Driver default | External database port |
 | `DN_DB_USER` / `DN_DB_PASSWORD` | See configuration | External database credentials |
 | `DN_APP_URL` | Request-derived | Canonical URL; set explicitly in production |
-| `DN_APP_NAME` | `Disco nunu` | Initial site title |
+| `DN_APP_NAME` | `disconunu` | Initial site title |
 | `DN_APP_SUBTITLE` | `Simple CMS for blogs` | Initial tagline |
-| `DN_THEME` | `teal` | Initial theme |
+| `DN_THEME` | `maison` | Initial theme |
 | `DN_TIMEZONE` | `UTC` | Application timezone |
 | `DN_DEBUG` | `0` | Error details; leave disabled in production |
 | `DN_SECURE_COOKIES` | `0` | Set to `1` on HTTPS deployments |

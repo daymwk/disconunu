@@ -1,6 +1,6 @@
 # Security
 
-Disco nunu is a small self-hosted CMS, not a multi-tenant hosting platform.
+disconunu is a small self-hosted CMS, not a multi-tenant hosting platform.
 Visitors are untrusted. Writer and admin accounts are constrained by server-side
 authorization. Superadmins and installed PHP themes are trusted with the site.
 
@@ -29,6 +29,7 @@ authorization. Superadmins and installed PHP themes are trusted with the site.
 | Passwords | PHP password hashing (Argon2id when available, bcrypt fallback) and transparent rehash |
 | Sessions | HttpOnly, SameSite=Lax, Secure on HTTPS, session ID regeneration on login |
 | Login attempts | Database-backed IP budget; replacing the browser cookie does not reset failures |
+| Audit log | Admin actions and sign-in attempts recorded with account, IP and target; superadmin-only view; no passwords, tokens or post bodies |
 | Draft/future content | Public queries exclude drafts and future publication dates; authenticated preview is non-cacheable and non-indexable |
 | Logo uploads | Superadmin only; PNG/JPEG/GIF/WebP, validated image data and size limit; no SVG uploads |
 | Theme archives | Superadmin only; root/layout validation, path confinement and extraction limits |

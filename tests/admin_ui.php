@@ -83,6 +83,7 @@ $_SESSION['user_id'] = $actor->id;
 $draft = DN\Model\Post::create($actor->id, 'Draft title', '<p>Two words</p>', 'Two words', 'draft');
 $published = DN\Model\Post::create($actor->id, 'Published title', '<p>Live words</p>', 'Live words', 'published');
 $posts = DN\Model\Post::all();
+DN\Model\AdminLog::record($actor, 'user_role', 'Tea & <b>', 'admin');
 $template = getenv('UI_TEMPLATE');
 $uri = match($template) {
     'dashboard' => '/admin', 'post-edit' => '/admin/post/' . $draft->id . '/edit',
@@ -97,7 +98,7 @@ $data = [
     'page' => 2, 'pages' => 8, 'total' => 142, 'perPage' => 20,
     'filters' => ['q' => 'tea & cake', 'status' => '', 'category' => '', 'author' => '', 'sort' => 'newest', 'role' => '', 'visibility' => '', 'per_page' => 20],
     'paginationUrl' => $uri . '?q=tea%20%26%20cake&page={page}',
-    'error' => '', 'noUsers' => false,
+    'error' => '', 'noUsers' => false, 'logs' => DN\Model\AdminLog::adminPage()['logs'],
 ];
 if (getenv('UI_SCENARIO') === 'repopulate') {
     $category = DN\Model\Category::create('Tea & "cake"');
@@ -190,7 +191,7 @@ $source = static fn(string $path): string => file_get_contents($theme . '/' . $p
 $href = static fn(array $a): string => $a['href'] ?? '';
 $action = static fn(array $a): string => $a['action'] ?? '';
 
-echo "\n=== Disco nunu — admin UI ===\n\n";
+echo "\n=== disconunu — admin UI ===\n\n";
 
 ($t)('post listing: filters, pagination, writer view-only', function () use ($render, $href, $action) {
     $html = $render('dashboard', 'writer');
@@ -291,6 +292,15 @@ $listChecks = static function (string $html, array $tags, array $fields) use ($h
     assert_in('General is the fallback category', $html);
 });
 
+($t)('logs: filters, escaped rows, active nav entry', function () use ($render, $listChecks, $href) {
+    $html = $render('logs');
+    $tags = tags($html);
+    $listChecks($html, $tags, ['q', 'action', 'per_page']);
+    assert_in('Tea &amp; &lt;b&gt;', $html);
+    assert_in('user role', $html);
+    assert_true(any(attrs($tags, 'a'), fn($a) => str_ends_with($href($a), '/admin/logs') && ($a['aria-current'] ?? '') === 'page'), 'Logs nav entry not active');
+});
+
 ($t)('users: filters, paginated responsive management', function () use ($render, $listChecks, $action) {
     $html = $render('users');
     $tags = tags($html);
@@ -364,7 +374,7 @@ echo "\n-- Starter theme --\n";
         require 'autoload.php'; DN\App::boot();
         $appName='<Example>'; $subtitle='Small site'; $baseUrl='http://example.test';
         $title='Example'; $themeUrl='/themes/starter-theme'; $fallbackThemeUrl='/themes/teal';
-        $logoUrl='/themes/teal/images/logo.jpg'; $rssEnabled=true; $user=null;
+        $logoUrl='/themes/teal/images/logo.svg'; $rssEnabled=true; $user=null;
         $cats=[]; $flashes=[]; $content='<article>Test content</article>';
         require 'examples/starter-theme/layout.php';
         PHP;

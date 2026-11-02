@@ -29,7 +29,7 @@ use DN\View;
 <section class="panel" id="logo"><h2>Site logo</h2><p class="muted">PNG, JPEG, GIF or WebP, up to 512 KiB. SVG is not accepted. Uploading replaces the custom logo; removing it restores the theme logo or bundled fallback.</p>
   <div class="logo-previews">
     <?php if ($logoUrl): ?><figure><img src="<?= Security::e($logoUrl) ?>" alt="Current site logo" width="84" height="84"><figcaption>Current logo</figcaption></figure><?php endif; ?>
-    <figure><img src="<?= Security::e($fallbackThemeUrl) ?>/images/logo.jpg" alt="Bundled fallback logo" width="84" height="84"><figcaption>Bundled fallback</figcaption></figure>
+    <figure><img src="<?= Security::e($fallbackThemeUrl) ?>/images/logo.svg" alt="Bundled fallback logo" width="84" height="84"><figcaption>Bundled fallback</figcaption></figure>
   </div>
   <form class="stack" method="post" action="<?= Security::e($baseUrl) ?>/admin/logo" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">

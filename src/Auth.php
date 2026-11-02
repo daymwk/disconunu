@@ -126,7 +126,7 @@ final class Auth
         }
     }
 
-    private static function clientIp(): string
+    public static function clientIp(): string
     {
         // REMOTE_ADDR only: no X-Forwarded-For (spoofable; behind a proxy, trust the front layer instead)
         return (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Disco nunu test suite — standalone runner, zero dependency (no PHPUnit needed).
+ * disconunu test suite — standalone runner, zero dependency (no PHPUnit needed).
  *   php tests/run.php
  * Every run starts from a fresh SQLite database (temp file, deleted at start).
  *
@@ -81,7 +81,7 @@ function assert_eq($expected, $actual, string $msg = ''): void
     }
 }
 
-echo "\n=== Disco nunu — test suite ===\n";
+echo "\n=== disconunu — test suite ===\n";
 
 // fresh database
 @unlink(getenv('DN_DB_DATABASE'));

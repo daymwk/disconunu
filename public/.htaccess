@@ -1,4 +1,4 @@
-# Disco nunu — docroot Apache. Seul public/ est exposé ; le code est hors racine.
+# disconunu — docroot Apache. Seul public/ est exposé ; le code est hors racine.
 Options -Indexes
 DirectoryIndex index.php
 

@@ -1,6 +1,6 @@
-# Contributing to Disco nunu
+# Contributing to disconunu
 
-Disco nunu is a small PHP CMS with server-rendered templates and an environment-driven configuration. Keep changes focused, preserve the bundled logo, and include runnable checks for behavior changes.
+disconunu is a small PHP CMS with server-rendered templates and an environment-driven configuration. Keep changes focused and include runnable checks for behavior changes.
 
 ## Requirements
 
@@ -63,14 +63,14 @@ Visit the configured URL; sign in at `/admin/login`. The built-in server is for 
 - `public/index.php`: request routing and controllers; `public/` is the document root.
 - `src/`: application services, authorization, database access, and models.
 - `src/Migrator.php`: versioned schema changes and database setup.
-- `themes/teal/`: bundled templates and assets, including the original logo.
+- `themes/teal/`: bundled templates and assets, including the bundled logo (`images/logo.svg`).
 - `examples/starter-theme/`: starting point for a custom theme; see its README.
 - `bin/disconunu`: maintenance CLI; `bin/seed-demo.php`: optional sample content.
 - `tests/`: standalone PHP checks, including HTTP end-to-end runs.
 
 Use English for code comments, interface text, sample content, and contributor documentation. Follow the surrounding PHP style, use prepared SQL statements, escape rendered values, sanitize user HTML, and enforce authorization and CSRF checks on the server. UI visibility is not a permission check. Keep theme fallbacks working and preserve accessibility, keyboard navigation, and mobile layouts.
 
-Add migrations rather than requiring contributors to discard their database. Test both a new database and an upgrade on a disposable copy. Avoid unrelated refactors, generated artifacts, and changes to the bundled logo. Never include database files, uploads, credentials, or personal account details in a patch.
+Add migrations rather than requiring contributors to discard their database. Test both a new database and an upgrade on a disposable copy. Avoid unrelated refactors, and generated artifacts. Never include database files, uploads, credentials, or personal account details in a patch.
 
 ## Tests
 

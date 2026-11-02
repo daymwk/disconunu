@@ -1,8 +1,8 @@
 # Starter theme
 
-A minimal, warm editorial theme for Disco nunu. It inherits the bundled public
+A minimal, warm editorial theme for disconunu. It inherits the bundled public
 page templates and CSS, overrides the layout and a few colors, and retains the
-original logo unless a custom site logo has been uploaded.
+bundled logo unless a custom site logo has been uploaded.
 
 ## Install
 

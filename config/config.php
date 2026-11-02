@@ -1,6 +1,6 @@
 <?php
 /**
- * Disco nunu — configuration.
+ * disconunu — configuration.
  * Source of truth: environment variables override the defaults below.
  * SQLite is the default engine; mysql/postgres are optional.
  */
@@ -13,12 +13,12 @@ function env(string $key, ?string $default = null): ?string
 
 return [
     'app' => [
-        'name'        => env('DN_APP_NAME', 'Disco nunu'),
+        'name'        => env('DN_APP_NAME', 'disconunu'),
         'subtitle'    => env('DN_APP_SUBTITLE', 'Simple CMS for blogs'),
         'url'         => env('DN_APP_URL', ''),            // e.g. https://blog.example.com — empty = auto-detect
         'debug'       => env('DN_DEBUG', '0') === '1',
         'timezone'    => env('DN_TIMEZONE', 'UTC'),
-        'theme'       => env('DN_THEME', 'teal'),
+        'theme'       => env('DN_THEME', 'maison'),
     ],
 
     'db' => [

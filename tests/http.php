@@ -242,7 +242,7 @@ function zip_bytes(array $files): string
     return $bytes;
 }
 
-echo "\n=== Disco nunu — HTTP & CLI regressions ===\n";
+echo "\n=== disconunu — HTTP & CLI regressions ===\n";
 
 // ---------------------------------------------------------------- smoke
 echo "\n-- HTTP smoke --\n";
@@ -734,6 +734,44 @@ $backend = static function (callable $fn) use ($PHP): callable {
     assert_eq(303, $anon->status('/admin/login', ['csrf' => $m[1] ?? '', 'username' => 'first-owner', 'email' => 'owner@example.test', 'password' => 'New-owner-pass-12345', 'role' => 'writer']));
     assert_eq([['first-owner', 'superadmin']], $s->rows('SELECT username,role FROM dn_user'));
     assert_eq(200, $anon->status('/admin/users'));
+}));
+
+($t)('admin audit log records actions, never secrets, superadmin only', $backend(function (Site $s, array $c) {
+    $anon = $c['anon'];
+    preg_match('/name="csrf" value="([^"]+)"/', $anon->body('/admin/login'), $m);
+    assert_eq(200, $anon->status('/admin/login', ['csrf' => $m[1] ?? '', 'username' => 'superadmin', 'password' => 'Wrong-pass-99999']), 'failed login');
+    $su = $c['superadmin'];
+    assert_eq(303, $su->status('/admin/users/create', ['username' => 'audited', 'email' => 'audited@example.test', 'password' => 'Audit-pass-12345', 'role' => 'writer']));
+    $uid = $s->rows("SELECT id FROM dn_user WHERE username='audited'")[0][0];
+    assert_eq(303, $su->status("/admin/users/{$uid}/role", ['role' => 'admin']));
+    assert_eq(303, $su->status("/admin/users/{$uid}/delete", []));
+    assert_eq(303, $su->status('/admin/settings', ['site_title' => 'Audited']));
+    assert_eq(303, $c['admin']->status('/admin/post/save', ['title' => 'Audit post', 'content' => '<p>Secret body text</p>', 'status' => 'published']));
+    $pid = $s->rows("SELECT id FROM dn_post WHERE title='Audit post'")[0][0];
+    assert_eq(303, $c['admin']->status("/admin/post/{$pid}/delete", []));
+    assert_eq(303, $c['admin']->status('/admin/categories/save', ['title' => 'Audit category', 'visible' => '1']));
+    foreach (['admin', 'writer', 'writer2'] as $actor) {
+        assert_eq(403, $c[$actor]->status('/admin/logs'), "logs denied to {$actor}");
+    }
+    assert_eq(303, $c['writer']->status('/admin/logout', []));
+    $log = $s->rows('SELECT username, action, target, detail FROM dn_admin_log ORDER BY id');
+    $has = static fn(array $row): bool => in_array($row, $log, true);
+    assert_eq(4, count(array_filter($log, static fn($r) => $r[1] === 'login')), 'logins');
+    foreach ([['superadmin', 'login_failed', '', ''], ['superadmin', 'user_create', 'audited', 'writer'], ['superadmin', 'user_role', 'audited', 'admin'],
+              ['superadmin', 'user_delete', 'audited', ''], ['superadmin', 'settings', '', 'site_title'], ['admin', 'post_create', "#{$pid} Audit post", 'published'],
+              ['admin', 'post_delete', "#{$pid} Audit post", ''], ['admin', 'category_save', 'Audit category', 'visible'], ['writer', 'logout', '', '']] as $row) {
+        assert_true($has($row), 'missing log row ' . json_encode($row));
+    }
+    $all = json_encode($s->rows('SELECT * FROM dn_admin_log'));
+    foreach (['Test-pass-12345', 'Wrong-pass-99999', 'Audit-pass-12345', 'Secret body text', $su->csrf, $m[1] ?? 'x'] as $secret) {
+        assert_true(!str_contains($all, $secret), 'secret leaked into the log');
+    }
+    assert_eq(303, $anon->status('/admin/logs'), 'logs need a session');
+    [$status, , $body] = $su->request('/admin/logs');
+    assert_eq(200, $status);
+    assert_true(str_contains($body, 'user create') && str_contains($body, 'audited') && str_contains($body, 'aria-current="page"'), 'log page content');
+    $failed = $su->body('/admin/logs?action=login_failed');
+    assert_true(str_contains($failed, '1 result') && !str_contains($failed, 'user create</span>'), 'action filter');
 }));
 
 echo "\n=== {$pass} passed";

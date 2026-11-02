@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Disco nunu — single front controller.
+ * disconunu — single front controller.
  * Everything routes through here (public site + admin).
  */
 
@@ -12,6 +12,7 @@ use DN\Acl;
 use DN\App;
 use DN\Auth;
 use DN\Http;
+use DN\Model\AdminLog;
 use DN\Model\Category;
 use DN\Model\Post;
 use DN\Model\Settings;
@@ -179,9 +180,10 @@ $router->any('/admin/login', function (): void {
                 $error = 'Email already in use.';
             } else {
                 try {
-                    User::createFirst($username, $email, $password);
+                    $owner = User::createFirst($username, $email, $password);
+                    AdminLog::record($owner, 'setup');
                     Auth::attempt($username, $password);
-                    Http::flash('ok', 'Admin created. Welcome to Disco nunu.');
+                    Http::flash('ok', 'Admin created. Welcome to disconunu.');
                     Http::redirect('/admin');
                 } catch (\RuntimeException $e) {
                     $noUsers = User::countAll() === 0;
@@ -189,9 +191,11 @@ $router->any('/admin/login', function (): void {
                     $error = 'Initial setup has already been completed. Please sign in.';
                 }
             }
-        } elseif (Auth::attempt(trim((string)($_POST['username'] ?? '')), (string)($_POST['password'] ?? ''))) {
+        } elseif (Auth::attempt($login = trim((string)($_POST['username'] ?? '')), (string)($_POST['password'] ?? ''))) {
+            AdminLog::record(User::findByUsername($login), 'login');
             Http::redirect('/admin');
         } else {
+            AdminLog::record(null, 'login_failed', username: $login);
             $error = 'Invalid credentials.';
         }
     }
@@ -200,6 +204,7 @@ $router->any('/admin/login', function (): void {
 
 $router->post('/admin/logout', function (): void {
     if (Security::checkCsrf($_POST['csrf'] ?? null)) {
+        if (($me = Auth::user()) !== null) AdminLog::record($me, 'logout');
         Auth::logout();
     }
     Http::redirect('/');
@@ -322,9 +327,11 @@ $router->post('/admin/post/save', function (): void {
     unset($_SESSION['post_form'][$id]);
     if ($post !== null) {
         $post->update($title, $content, $excerpt, $status);
+        AdminLog::record($u, 'post_update', "#{$post->id} {$title}", $status);
         Http::flash('ok', 'Post updated.');
     } else {
         $post = Post::create((int)$u->id, $title, $content, $excerpt, $status);
+        AdminLog::record($u, 'post_create', "#{$post->id} {$title}", $status);
         Http::flash('ok', 'Post created: /post/' . $post->slug);
     }
 
@@ -358,6 +365,7 @@ $router->post('/admin/post/{id}/delete', function (array $args): void {
         Http::abort(403, 'You cannot delete this post.');
     }
     $post->delete();
+    AdminLog::record(Auth::user(), 'post_delete', "#{$post->id} {$post->title}");
     Http::flash('ok', 'Post deleted.');
     Http::redirect('/admin');
 });
@@ -398,6 +406,7 @@ $router->post('/admin/categories/save', function (): void {
     } else {
         Category::create($title, trim((string)($_POST['slug'] ?? '')) ?: null, $visible);
     }
+    AdminLog::record(Auth::user(), 'category_save', $title, $visible ? 'visible' : 'hidden');
     Http::flash('ok', 'Category saved.');
     Http::redirect('/admin/categories');
 });
@@ -422,6 +431,7 @@ $router->post('/admin/categories/{id}/delete', function (array $args): void {
         Http::abort(403, 'The general category cannot be deleted.');
     }
     $cat->delete();
+    AdminLog::record(Auth::user(), 'category_delete', $cat->title);
     Http::flash('ok', 'Category deleted; uncategorized posts moved to General.');
     Http::redirect('/admin/categories');
 });
@@ -448,8 +458,14 @@ $router->any('/admin/settings', function (): void {
         if (array_key_exists('rss_enabled', $_POST)) {
             Settings::set('rss_enabled', $_POST['rss_enabled'] === '1' ? '1' : '0');
         }
+        $previousTheme = Settings::theme();
         if (array_key_exists('theme', $_POST)) {
             Settings::set('theme', $_POST['theme']);
+        }
+        $changed = array_intersect(['site_title', 'site_tagline', 'footer_text', 'posts_per_page', 'rss_enabled', 'theme'], array_keys($_POST));
+        AdminLog::record(Auth::user(), 'settings', '', implode(', ', $changed));
+        if (Settings::theme() !== $previousTheme) {
+            AdminLog::record(Auth::user(), 'theme_activate', Settings::theme());
         }
         Http::flash('ok', 'Settings saved.');
         Http::redirect('/admin/settings');
@@ -472,6 +488,7 @@ $router->any('/admin/logo', function (): void {
             foreach (glob(App::rootDir() . '/var/uploads/logo.*') ?: [] as $f) {
                 @unlink($f);
             }
+            AdminLog::record(Auth::user(), 'logo_remove');
             Http::flash('ok', 'Logo removed (theme default restored).');
             Http::redirect('/admin/settings');
         }
@@ -503,6 +520,7 @@ $router->any('/admin/logo', function (): void {
             Http::flash('error', 'Could not save logo. The previous logo was kept.');
             Http::redirect('/admin/settings');
         }
+        AdminLog::record(Auth::user(), 'logo_upload', basename($target), $mime);
         Http::flash('ok', 'Logo updated.');
         Http::redirect('/admin/settings');
     }
@@ -526,11 +544,13 @@ $router->post('/admin/theme', function (): void {
     }
     try {
         $name = ThemeManager::installFromZip((string)$f['tmp_name']);
+        AdminLog::record(Auth::user(), 'theme_install', $name);
         if (($_POST['activate'] ?? '') === '1') {
             if (!ThemeManager::exists($name)) {
                 Http::abort(400, 'Invalid theme.');
             }
             Settings::set('theme', $name);
+            AdminLog::record(Auth::user(), 'theme_activate', $name);
             Http::flash('ok', "Theme “{$name}” installed and activated.");
         } else {
             Http::flash('ok', "Theme “{$name}” installed. Activate it in Settings when ready.");
@@ -594,11 +614,18 @@ $router->post('/admin/theme/{name}/delete', function (array $args): void {
     } elseif (!ThemeManager::exists($name)) {
         Http::flash('error', 'Unknown theme.');
     } elseif (ThemeManager::removeTheme($name)) {
+        AdminLog::record(Auth::user(), 'theme_delete', $name);
         Http::flash('ok', "Theme “{$name}” deleted.");
     } else {
         Http::flash('error', "Could not delete theme “{$name}”.");
     }
     Http::redirect('/admin/settings');
+});
+
+// ---------- Admin: audit log (superadmin) ----------
+$router->get('/admin/logs', function (): void {
+    Auth::requireSuperAdmin();
+    View::render('admin/logs', AdminLog::adminPage($_GET) + ['title' => 'Logs']);
 });
 
 // ---------- Admin: users (superadmin) ----------
@@ -632,6 +659,7 @@ $router->post('/admin/users/create', function (): void {
         Http::flash('error', 'That username or email is already taken.');
     } else {
         $created = User::create($username, $email, $password, $role);
+        AdminLog::record(Auth::user(), 'user_create', $created->username, $role);
         Http::flash('ok', "User {$created->username} created ({$role}).");
     }
     Http::redirect('/admin/users');
@@ -651,6 +679,7 @@ $router->post('/admin/users/{id}/delete', function (array $args): void {
         Http::abort(403, 'You cannot delete this account (yourself, or the last superadmin).');
     }
     $target->delete();
+    AdminLog::record($me, 'user_delete', $target->username);
     Http::flash('ok', 'Account deleted.');
     Http::redirect('/admin/users');
 });
@@ -670,6 +699,7 @@ $router->post('/admin/users/{id}/role', function (array $args): void {
         Http::flash('error', 'You cannot demote yourself (lockout protection).');
     } else {
         $tgt->setRole($role);
+        AdminLog::record($me, 'user_role', $tgt->username, $role);
         Http::flash('ok', "Role of {$tgt->username} set to {$role}.");
     }
     Http::redirect('/admin/users');

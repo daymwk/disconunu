@@ -29,12 +29,13 @@ register_shutdown_function(static function () use ($root): void {
     if (session_status() === PHP_SESSION_ACTIVE) session_destroy();
     removeTree($root);
 });
-foreach (['src', 'config', 'themes/teal'] as $path) copyTree(dirname(__DIR__) . '/' . $path, $root . '/' . $path);
+foreach (['src', 'config', 'themes/teal', 'themes/maison'] as $path) copyTree(dirname(__DIR__) . '/' . $path, $root . '/' . $path);
 copy(dirname(__DIR__) . '/autoload.php', $root . '/autoload.php');
 mkdir($root . '/var/uploads', 0700, true);
 mkdir($root . '/sessions', 0700);
 session_save_path($root . '/sessions');
 putenv('DN_APP_URL=http://example.test');
+putenv('DN_THEME');
 putenv('DN_DB_DATABASE=' . $root . '/never-open.sqlite');
 require $root . '/autoload.php';
 (new ReflectionProperty(Settings::class, 'cache'))->setValue(null, Settings::DEFAULTS + []);
@@ -77,8 +78,8 @@ $tests['admin partials use bundled files and preserve flash messages'] = static 
 
 $tests['public theme without a logo uses the unchanged bundled image'] = static function () use ($root): void {
     setTheme('custom');
-    check(View::logoUrl() === 'http://example.test/themes/teal/images/logo.jpg', 'missing bundled logo fallback');
-    check(hash_file('sha256', $root . '/themes/teal/images/logo.jpg') === hash_file('sha256', dirname(__DIR__) . '/themes/teal/images/logo.jpg'), 'bundled logo bytes changed');
+    check(View::logoUrl() === 'http://example.test/themes/teal/images/logo.svg', 'missing bundled logo fallback');
+    check(hash_file('sha256', $root . '/themes/teal/images/logo.svg') === hash_file('sha256', dirname(__DIR__) . '/themes/teal/images/logo.svg'), 'bundled logo bytes changed');
 };
 
 $tests['uploaded GIF overrides the theme logo'] = static function () use ($root): void {
@@ -201,9 +202,17 @@ $tests['public previews retain the public shell on admin URLs'] = static functio
     check(str_contains($html, 'PUBLIC_PREVIEW'), 'View failed to provide public isAdmin flag');
     check(!str_contains($html, 'admin-page') && str_contains($html, 'site-header'), 'layout ignored public preview flag');
 };
+$tests['default maison theme styles the bundled layout and keeps the disco-ball logo'] = static function (): void {
+    (new ReflectionProperty(Settings::class, 'cache'))->setValue(null, Settings::DEFAULTS + []);
+    check(Settings::theme() === 'maison' && ThemeManager::exists('maison'), 'maison is not the installed default');
+    $_SERVER['REQUEST_URI'] = '/';
+    $html = capture(static fn() => View::render('error', ['code' => 404, 'message' => 'Not found']));
+    check(str_contains($html, 'site-header') && str_contains($html, '/themes/maison/css/style.css'), 'maison stylesheet not used by the bundled layout');
+    check(View::logoUrl() === 'http://example.test/themes/teal/images/logo.svg', 'maison lost the bundled logo');
+};
 $tests['missing active theme logo resolves to the bundled URL rather than a broken URL'] = static function (): void {
     setTheme('does-not-exist');
-    check(View::logoUrl() === 'http://example.test/themes/teal/images/logo.jpg', 'fallback image uses invalid active theme URL');
+    check(View::logoUrl() === 'http://example.test/themes/teal/images/logo.svg', 'fallback image uses invalid active theme URL');
 };
 
 $tests['linked theme directories cannot expose or delete another theme'] = static function () use ($root): void {

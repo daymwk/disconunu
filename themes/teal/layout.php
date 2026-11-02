@@ -10,6 +10,7 @@ $active = match (true) {
     str_starts_with($adminPath, '/admin/post/') => 'post',
     str_starts_with($adminPath, '/admin/categories') => 'categories',
     str_starts_with($adminPath, '/admin/users') => 'users',
+    str_starts_with($adminPath, '/admin/logs') => 'logs',
     str_starts_with($adminPath, '/admin/settings'), str_starts_with($adminPath, '/admin/theme'), str_starts_with($adminPath, '/admin/logo') => 'settings',
     default => 'dashboard',
 };
@@ -19,7 +20,7 @@ $active = match (true) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="generator" content="Disco nunu <?= \DN\App::VERSION ?>">
+<meta name="generator" content="disconunu <?= \DN\App::VERSION ?>">
 <title><?= Security::e($title ?? ($isAdmin ? 'Administration' : $appName)) ?> — <?= Security::e($appName) ?></title>
 <link rel="stylesheet" href="<?= Security::e($isAdmin ? $adminAssets : $themeUrl) ?>/css/style.css">
 <?php if ($isAdmin): ?>
@@ -34,8 +35,8 @@ $active = match (true) {
 <div class="admin-shell">
   <aside class="admin-sidebar">
     <a class="admin-brand" href="<?= Security::e($baseUrl) ?>/admin">
-      <img src="<?= Security::e($adminAssets) ?>/images/logo.jpg" alt="" width="44" height="44">
-      <span><strong>Disco nunu</strong><small>Publishing workspace</small></span>
+      <img src="<?= Security::e($adminAssets) ?>/images/logo.svg" alt="" width="44" height="44">
+      <span><strong>disconunu</strong><small>Publishing workspace</small></span>
     </a>
     <?php if ($user): ?>
       <?php require __DIR__ . '/admin/nav.php'; ?>
@@ -77,7 +78,7 @@ $active = match (true) {
 <?= $content ?>
 </main>
 <?php if ($isAdmin): ?>
-    <footer class="admin-footer"><span>Disco nunu <span aria-hidden="true">·</span> Made for publishing.</span><a href="<?= Security::e($baseUrl) ?>/" target="_blank" rel="noopener">View site ↗</a></footer>
+    <footer class="admin-footer"><span>disconunu <span aria-hidden="true">·</span> Made for publishing.</span><a href="<?= Security::e($baseUrl) ?>/" target="_blank" rel="noopener">View site ↗</a></footer>
   </div>
 </div>
 <?php else: ?>

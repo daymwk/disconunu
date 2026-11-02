@@ -89,12 +89,14 @@ final class View
                 return App::baseUrl() . '/uploads/' . $f;
             }
         }
-        $themeLogo = self::themeDir() . '/images/logo.jpg';
-        if (is_file($themeLogo)) {
-            return App::baseUrl() . '/themes/' . rawurlencode(basename(self::themeDir())) . '/images/logo.jpg';
+        foreach ([self::themeDir(), self::fallbackDir()] as $dir) {
+            foreach (['logo.svg', 'logo.jpg'] as $f) {
+                if (is_file($dir . '/images/' . $f)) {
+                    return App::baseUrl() . '/themes/' . rawurlencode(basename($dir)) . '/images/' . $f;
+                }
+            }
         }
-        return is_file(self::fallbackDir() . '/images/logo.jpg')
-            ? App::baseUrl() . '/themes/' . self::FALLBACK_THEME . '/images/logo.jpg' : null;
+        return null;
     }
 
     /**

@@ -131,6 +131,20 @@ final class Migrator
             // pg_trgm) — until then Post::search() falls back to LIKE (portable,
             // good enough for a small blog).
             ...($db->driver() === 'sqlite' ? self::sqliteFts() : []),
+            // Audit trail of administrative actions (never passwords or post bodies).
+            3 => [
+                "CREATE TABLE dn_admin_log (
+                    id {$pk},
+                    created_at {$ts} NOT NULL,
+                    user_id INTEGER NULL,
+                    username VARCHAR(64) NOT NULL DEFAULT '',
+                    ip VARCHAR(45) NOT NULL DEFAULT '',
+                    action VARCHAR(32) NOT NULL,
+                    target VARCHAR(255) NOT NULL DEFAULT '',
+                    detail VARCHAR(500) NOT NULL DEFAULT ''
+                )",
+                "CREATE INDEX dn_admin_log_created ON dn_admin_log (created_at)",
+            ],
         ];
     }
 

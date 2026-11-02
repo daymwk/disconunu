@@ -13,6 +13,7 @@ if (Acl::canManageCategories($user)) {
 if (Acl::canAdminister($user)) {
     $links[] = ['users', '/admin/users', 'Users', '♙'];
     $links[] = ['settings', '/admin/settings', 'Settings', '⚙'];
+    $links[] = ['logs', '/admin/logs', 'Logs', '☰'];
 }
 ?>
 <p class="nav-heading">Workspace</p>
