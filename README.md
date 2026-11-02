@@ -85,6 +85,8 @@ Upload a PNG, JPEG, GIF or WebP logo (maximum 512 KiB), or reset to the default.
 4. Select an installed theme and save settings to activate it later.
 5. Switch away before uninstalling a theme. The default public theme is `maison`; the bundled `teal` fallback cannot be removed.
 
+Three public themes ship with disconunu: `maison` (light, default), `disco` (dark, mirror-ball rainbow) and `teal` (the original look and bundled fallback).
+
 The ZIP must contain `layout.php`, either at its root or inside one enclosing theme folder. Missing public templates use the bundled fallback. Administration uses the bundled templates regardless of the selected public theme.
 
 **Themes execute PHP with the application's permissions. Only install trusted source code.** Archive validation prevents unsafe paths and oversized extraction; it does not sandbox PHP. Keep the `themes/` directory writable only when installing/removing themes if your deployment supports that workflow.

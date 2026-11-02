@@ -1,0 +1,109 @@
+/* ============================================================
+   disconunu — "disco" theme
+   The dance floor after midnight: violet dark, spotlights in the
+   corners, and the mirror-ball rainbow as the only accent.
+   Dark only, by design. No external fonts.
+   ============================================================ */
+@import url("../../teal/css/style.css");
+
+html:root {
+  color-scheme: dark;
+  --rainbow:   linear-gradient(90deg, #ff5fa8, #ffb347, #ffe66d, #4fe3c1, #5fb4ff, #b98cff, #ff5fa8);
+  --teal:      #ff5fa8;
+  --teal-deep: #ff5fa8;
+  --teal-ink:  #ffd6ea;
+  --ink:       #efeaf9;
+  --ink-soft:  #aba3c6;
+  --paper:     #0f0b1a;
+  --card:      rgba(26, 20, 46, .78);
+  --line:      #2c2447;
+  --accent-bg: #2a1d3d;
+  --danger:    #ff6b6b;
+  --ok:        #4fe3c1;
+  --radius:    14px;
+  --shadow:    0 1px 0 rgba(255,255,255,.04) inset, 0 20px 50px -28px rgba(0,0,0,.9);
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-ui:   var(--font-body);
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+}
+
+body {
+  background:
+    radial-gradient(60rem 40rem at -10% -10%, rgba(255, 95, 168, .16), transparent 60%),
+    radial-gradient(50rem 36rem at 110% 0%, rgba(95, 180, 255, .14), transparent 60%),
+    radial-gradient(48rem 30rem at 50% 115%, rgba(185, 140, 255, .14), transparent 60%),
+    var(--paper);
+  background-attachment: fixed;
+}
+::selection { background: #ff5fa8; color: #120d20; }
+
+h1, h2, h3, .brand-text strong { font-family: var(--font-display); font-weight: 600; letter-spacing: -.01em; }
+
+/* header: smoked glass with the mirror-ball line underneath */
+.site-header {
+  position: sticky; top: 0; z-index: 10;
+  background: rgba(15, 11, 26, .72);
+  backdrop-filter: blur(12px) saturate(140%);
+  color: var(--ink);
+  border-bottom: 0;
+}
+.site-header::after {
+  content: ""; display: block; height: 2px;
+  background: var(--rainbow); background-size: 200% 100%;
+  animation: disco-sweep 12s linear infinite;
+}
+.brand, .site-nav a { color: var(--ink); }
+.brand-text small { color: var(--ink-soft); opacity: 1; }
+.brand-logo { filter: drop-shadow(0 0 10px rgba(255, 95, 168, .45)); }
+.site-nav a:hover, .site-nav a:focus-visible { background: rgba(255,255,255,.07); }
+.site-nav .btn-admin { background: transparent; outline: 1px solid rgba(255, 95, 168, .6); color: #ffd6ea; }
+
+/* cards: glass, rainbow edge, a little lift */
+.post-card {
+  position: relative; border: 1px solid var(--line); border-top: 0;
+  backdrop-filter: blur(6px); overflow: hidden;
+  transition: transform .2s ease, border-color .2s ease;
+}
+.post-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--rainbow); }
+.post-card:hover { transform: translateY(-2px); border-color: #4a3d72; }
+.post-card h2 { font-size: 1.6rem; }
+.post-card h2 a:hover { color: #ffb347; }
+.more-link { color: #ff8cc0; }
+
+.post > h1 {
+  background: linear-gradient(90deg, #ffd6ea, #ffe66d 45%, #a6e9ff);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.post-body a { color: #8fd0ff; }
+.post-body blockquote { border-left: 3px solid #b98cff; }
+.post-body pre, .post-body code { background: #130e22; }
+
+.btn { background: var(--rainbow); background-size: 200% 100%; border: 0; color: #120d20; }
+.btn:hover { filter: brightness(1.08); }
+.btn-danger, .btn-ghost { background: transparent; }
+.btn-ghost { color: #ff8cc0; }
+
+input[type=text], input[type=password], input[type=email], input[type=search], textarea, select { background: #130e22; }
+
+.pagination a, .pagination .current { background: rgba(26, 20, 46, .78); }
+.pagination .current { background: #ff5fa8; border-color: #ff5fa8; color: #120d20; }
+html .badge-draft { background: #2c2447; color: #cfc8e6; }
+html .badge-published { background: rgba(79, 227, 193, .14); color: #4fe3c1; }
+
+.site-footer { border-top: 1px solid var(--line); }
+.site-footer a { color: #ff8cc0; }
+
+.error-page h1 { font-size: 1.3rem; font-weight: 500; color: var(--ink-soft); }
+.error-page .code {
+  margin: 0; font-family: var(--font-display); font-size: clamp(5rem, 18vw, 9rem);
+  background: var(--rainbow); background-size: 200% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: disco-sweep 8s linear infinite;
+}
+
+@keyframes disco-sweep { to { background-position: 200% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .site-header::after, .error-page .code { animation: none; }
+  .post-card { transition: none; }
+  .post-card:hover { transform: none; }
+}

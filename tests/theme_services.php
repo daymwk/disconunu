@@ -29,7 +29,7 @@ register_shutdown_function(static function () use ($root): void {
     if (session_status() === PHP_SESSION_ACTIVE) session_destroy();
     removeTree($root);
 });
-foreach (['src', 'config', 'themes/teal', 'themes/maison'] as $path) copyTree(dirname(__DIR__) . '/' . $path, $root . '/' . $path);
+foreach (['src', 'config', 'themes/teal', 'themes/maison', 'themes/disco'] as $path) copyTree(dirname(__DIR__) . '/' . $path, $root . '/' . $path);
 copy(dirname(__DIR__) . '/autoload.php', $root . '/autoload.php');
 mkdir($root . '/var/uploads', 0700, true);
 mkdir($root . '/sessions', 0700);
@@ -209,6 +209,14 @@ $tests['default maison theme styles the bundled layout and keeps the disco-ball 
     $html = capture(static fn() => View::render('error', ['code' => 404, 'message' => 'Not found']));
     check(str_contains($html, 'site-header') && str_contains($html, '/themes/maison/css/style.css'), 'maison stylesheet not used by the bundled layout');
     check(View::logoUrl() === 'http://example.test/themes/teal/images/logo.svg', 'maison lost the bundled logo');
+};
+$tests['bundled disco theme overrides only its error page'] = static function (): void {
+    setTheme('disco');
+    check(ThemeManager::exists('disco'), 'disco theme not installed');
+    $_SERVER['REQUEST_URI'] = '/post/missing';
+    $html = capture(static fn() => View::render('error', ['code' => 404, 'message' => '<Gone>']));
+    check(str_contains($html, '/themes/disco/css/style.css') && str_contains($html, 'class="error-page"'), 'disco error page not used');
+    check(str_contains($html, '<p class="code">404</p>') && str_contains($html, '&lt;Gone&gt;'), 'disco error page lost code or escaping');
 };
 $tests['missing active theme logo resolves to the bundled URL rather than a broken URL'] = static function (): void {
     setTheme('does-not-exist');
