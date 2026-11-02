@@ -160,9 +160,7 @@ To upgrade, back up first, deploy the new source without replacing `var/` or cus
 ## Development and tests
 
 ```sh
-python3 tests/run_all.py
-# Optional: with Playwright installed and CHROME_BIN set to a Chromium executable
-python3 tests/run_all.py --browser
+php tests/run_all.php
 ```
 
 The suites use temporary databases. HTTP suites isolate uploads and installed themes from the working site. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development guidance and additional checks. Test success is not a guarantee that a deployment is secure; configuration and trusted theme code remain the operator's responsibility.

@@ -36,9 +36,8 @@ authorization. Superadmins and installed PHP themes are trusted with the site.
 | Browser headers | Content Security Policy, frame restrictions, nosniff and referrer policy |
 | Exceptions | Generic public error response unless explicitly running with debug enabled |
 
-See the executable tests under `tests/`, particularly `backend_http.py`,
-`accounts.py`, `security_regression.php`, `theme_services.php` and
-`smoke_http.sh`. Tests are regression evidence, not a security certification.
+See the executable tests under `tests/`, particularly `http.php`,
+`security_regression.php` and `theme_services.php`. Tests are regression evidence, not a security certification.
 
 ## Deployment checklist
 

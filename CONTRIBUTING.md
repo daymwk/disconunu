@@ -6,7 +6,7 @@ Disco nunu is a small PHP CMS with server-rendered templates and an environment-
 
 - PHP 8.2 or newer with PDO and `pdo_sqlite` for local development, `mbstring`, `dom`, and `fileinfo`.
 - SQLite with FTS5 support for full-text search; `zip` for theme installation and its tests.
-- Python 3 for the test helpers, Bash and curl for HTTP smoke tests, and Git.
+- Git. The test suites are plain PHP; nothing else is needed.
 
 There is no Composer dependency, JavaScript package installation, or asset build step. The project uses `autoload.php`; PHP templates, CSS, and JavaScript are edited directly.
 
@@ -15,10 +15,9 @@ Check your environment:
 ```bash
 php -v
 php -m
-python3 --version
 ```
 
-If the SQLite modules are installed but disabled, add `-d extension=pdo_sqlite -d extension=sqlite3` after `php` in the commands below, or enable them in your CLI PHP configuration. Do not load an extension twice. The HTTP smoke runner accepts these options through `PHPFLAGS`; the standalone PHP runner requires the options on its command line.
+If the SQLite modules are installed but disabled, add `-d extension=pdo_sqlite -d extension=sqlite3` after `php` in the commands below, or enable them in your CLI PHP configuration. Do not load an extension twice. `tests/run_all.php` loads missing modules on its own.
 
 ## Local setup
 
@@ -67,7 +66,7 @@ Visit the configured URL; sign in at `/admin/login`. The built-in server is for 
 - `themes/teal/`: bundled templates and assets, including the original logo.
 - `examples/starter-theme/`: starting point for a custom theme; see its README.
 - `bin/disconunu`: maintenance CLI; `bin/seed-demo.php`: optional sample content.
-- `tests/`: standalone PHP, Python, and HTTP checks.
+- `tests/`: standalone PHP checks, including HTTP end-to-end runs.
 
 Use English for code comments, interface text, sample content, and contributor documentation. Follow the surrounding PHP style, use prepared SQL statements, escape rendered values, sanitize user HTML, and enforce authorization and CSRF checks on the server. UI visibility is not a permission check. Keep theme fallbacks working and preserve accessibility, keyboard navigation, and mobile layouts.
 
@@ -75,35 +74,13 @@ Add migrations rather than requiring contributors to discard their database. Tes
 
 ## Tests
 
-Run from the repository root. Select SQLite explicitly, and unset `BASE` so the smoke runner creates its own temporary application and server rather than targeting a running site:
+Run from the repository root:
 
 ```bash
-export DN_DB_DRIVER=sqlite
-unset BASE
-php tests/run.php
-php tests/security_regression.php
-bash tests/smoke_http.sh
-python3 tests/accounts.py
-python3 tests/backend_http.py
-python3 tests/admin_ui.py
-python3 tests/starter_theme.py
+php tests/run_all.php
 ```
 
-For browser checks, install Playwright in a disposable virtual environment and
-use an installed Chromium browser:
-
-```bash
-python3 -m venv /tmp/disconunu-browser
-/tmp/disconunu-browser/bin/pip install playwright
-CHROME_BIN=/usr/bin/google-chrome-stable /tmp/disconunu-browser/bin/python tests/browser_e2e.py
-```
-
-Adjust `CHROME_BIN` for the local browser. This suite creates a copied application,
-accounts through the UI, and temporary content; it checks layouts at multiple
-viewport widths, new tabs, previews and editor behavior. Set `DN_SCREENSHOTS` to
-a directory outside the checkout to save screenshots.
-
-The PHP and HTTP suites use temporary application/database fixtures. The Python checks cover static admin markup and starter-theme packaging/rendering; they do not replace a real browser check. Review responsive layouts and keyboard behavior manually when changing the interface. Record actual test output, not a fixed expected test count.
+Each suite also runs alone (`php tests/http.php`, …). They use temporary application copies, databases and servers, never the working site. Rendered markup checks do not replace a real browser: review responsive layouts and keyboard behavior manually when changing the interface. Record actual test output, not a fixed expected test count.
 
 Lint changed PHP files, including CLI scripts without a `.php` extension:
 
@@ -121,7 +98,7 @@ php bin/disconunu migrate
 php bin/disconunu user seed_owner seed-owner@example.test
 php bin/seed-demo.php 200
 php bin/seed-demo.php 200
-python3 -c 'import os, sqlite3; db = sqlite3.connect(os.environ["DN_DB_DATABASE"]); n = db.execute("SELECT COUNT(*) FROM dn_post").fetchone()[0]; print("posts:", n); assert n == 200'
+php -r '$n = (new PDO("sqlite:" . getenv("DN_DB_DATABASE")))->query("SELECT COUNT(*) FROM dn_post")->fetchColumn(); echo "posts: $n\n"; exit($n == 200 ? 0 : 1);'
 ```
 
 The second seed should report nothing to do, and the query should report `posts: 200`. Use only disposable databases to test `--reset` or different target totals. Remove temporary fixtures when finished.

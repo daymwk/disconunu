@@ -7,7 +7,7 @@ declare(strict_types=1);
  * Every run starts from a fresh SQLite database (temp file, deleted at start).
  *
  * NOTE: 404/405/403 paths go through Http::abort() which exits the process —
- * they are covered end-to-end by tests/smoke_http.sh rather than here.
+ * they are covered end-to-end by tests/http.php rather than here.
  */
 
 // Theme installation tests must never write into the working application.
