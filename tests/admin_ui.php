@@ -74,6 +74,7 @@ function run_php(array $cmd, array $env, string $cwd): array
 }
 
 const RENDER = <<<'PHP'
+if (getenv('UI_SCENARIO') === 'tz') putenv('DN_TIMEZONE=Europe/Paris');
 require 'autoload.php';
 DN\App::boot();
 DN\Migrator::run();
@@ -113,6 +114,10 @@ if (getenv('UI_SCENARIO') === 'foreign') {
     $data['post'] = DN\Model\Post::create($other->id, 'Other draft', '<p>Private</p>', 'Private', 'draft');
 }
 if (getenv('UI_SCENARIO') === 'new') $data['post'] = null;
+if (getenv('UI_SCENARIO') === 'tz') {
+    DN\Database::get()->pdo()->exec("INSERT INTO dn_admin_log (created_at, username, action) VALUES ('2026-01-15 12:00:00', 'tz-probe', 'login')");
+    $data['logs'] = DN\Model\AdminLog::adminPage(['q' => 'tz-probe'])['logs'];
+}
 if (getenv('UI_SCENARIO') === 'new-validation') {
     $data['post']->id = 0;
     $data['post']->status = 'published';
@@ -299,6 +304,13 @@ $listChecks = static function (string $html, array $tags, array $fields) use ($h
     assert_in('Tea &amp; &lt;b&gt;', $html);
     assert_in('user role', $html);
     assert_true(any(attrs($tags, 'a'), fn($a) => str_ends_with($href($a), '/admin/logs') && ($a['aria-current'] ?? '') === 'page'), 'Logs nav entry not active');
+});
+
+($t)('logs: UTC rows shown in the site timezone', function () use ($render) {
+    assert_in('Times in UTC.', $render('logs'));
+    $html = $render('logs', 'superadmin', 'tz');
+    assert_in('Times in Europe/Paris.', $html);
+    assert_in('2026-01-15 13:00:00', $html);
 });
 
 ($t)('users: filters, paginated responsive management', function () use ($render, $listChecks, $action) {

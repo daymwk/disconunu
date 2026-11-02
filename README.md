@@ -93,7 +93,7 @@ The ZIP must contain `layout.php`, either at its root or inside one enclosing th
 
 ### Audit log
 
-Superadmins open **Logs** (`/admin/logs`) to see who did what and when: sign-ins (including failed attempts with the login tried), sign-outs, first-account setup, post, category, user, settings, logo and theme changes. Each entry stores the time (UTC), account, client IP, action and target. Passwords, CSRF tokens and post bodies are never recorded. Entries are kept until removed from the `dn_admin_log` table; disconunu does not purge them.
+Superadmins open **Logs** (`/admin/logs`) to see who did what and when: sign-ins (including failed attempts with the login tried), sign-outs, first-account setup, post, category, user, settings, logo and theme changes. Each entry stores the time (UTC, shown in `DN_TIMEZONE`), account, client IP, action and target. Passwords, CSRF tokens and post bodies are never recorded. Entries are kept until removed from the `dn_admin_log` table; disconunu does not purge them.
 
 ## Configuration
 
@@ -110,7 +110,7 @@ Environment variables override defaults in [`config/config.php`](config/config.p
 | `DN_APP_NAME` | `disconunu` | Initial site title |
 | `DN_APP_SUBTITLE` | `Simple CMS for blogs` | Initial tagline |
 | `DN_THEME` | `maison` | Initial theme |
-| `DN_TIMEZONE` | `UTC` | Application timezone |
+| `DN_TIMEZONE` | `UTC` | Application timezone, e.g. `Europe/Paris` (dates and audit log display) |
 | `DN_DEBUG` | `0` | Error details; leave disabled in production |
 | `DN_SECURE_COOKIES` | `0` | Set to `1` on HTTPS deployments |
 
